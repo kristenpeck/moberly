@@ -9,6 +9,7 @@
 
 library(RODBC)
 library(dplyr)
+library(lubridate)
 
 #Open "channel" to database to extract data tables. Close connection when done #
 # CHECK CURRENT NAME OF MASTER DB if this doesn't work
@@ -25,140 +26,114 @@ LT.ID <-  sqlFetch(ch,"TABLE - Specific Fish ID Info")
 
 odbcCloseAll()
 
-##################
-### Workspaces ###
-##################
-
-#Db.connect <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2017-18/Db_connect/"
-
-getwd()
-
-###################################
-#### calculate some common fields #
-###################################
-
-#EFFORT#
-str(effort)
-
-effort$field.ID <- as.character(effort$EffortFieldNumber)
-effort$start.date.time <- effort$EffortStartDateTime
-effort$end.date.time <- effort$EffortEndDateTime
-effort$yr <- as.integer(substr(effort$EffortEndDateTime,1,4))
-effort$month <- substr(effort$EffortEndDateTime,6,7)
-effort$season <- ifelse(effort$month=="12"|effort$month=="01"|effort$month=="02","4winter",
-                        ifelse(effort$month=="03"|effort$month=="04"|effort$month=="05","1spring",
-                               ifelse(effort$month=="07"|effort$month=="08"|effort$month=="09","2summer",
-                                      ifelse(effort$month=="10"|effort$month=="11","3fall",NA)))
-)
-#exceptions:
-
-effort[which(effort$yr==2008 & effort$month=="09"), "season"] <- "3fall"
-effort[which(effort$yr==2009 & effort$month=="09"), "season"] <- "3fall"
-
-
-#for some reason this does not work... I think date has to be converted to a factor 
-#and ordered but blech...
-#effort$month.day <- format(effort$start.date.time, "%b-%d")
-#effort$season <- ifelse(effort$month.day >= "Dec-01" & 
-#	effort$month.day <= "Feb-28","winter",
-#	ifelse(effort$month.day >= "Mar-01" & 
-#	effort$month.day <= "Apr-30", "spring",
-#	ifelse(effort$month.day >= "Jul-01" & 
-#	effort$month.day <= "Sept-15","summer",
-#	ifelse(effort$month.day >= "Sept-15" & 
-#	effort$month.day <= "Oct-31","fall",NA)))
-#)
-
-effort[,c("start.date.time","month","season")]
-
-#yrs <- levels(as.factor(effort$yr))
-#par(mfrow=c(8,2), mar=c(2,2,2,2))
-#for (i in 1:length(yrs)){
-#hist(effort[which(effort$yr==yrs[i]),"end.date.time"], breaks="months", main=yrs[i], xlab=NULL, ylab=NULL)
-#}
-
-effort$soaktime <- round(difftime(effort$EffortEndDateTime,
-                                  effort$EffortStartDateTime, units = "hours"),2)
-effort$shoal <- effort$EffortSpawningShoal
-effort$UTMZ <- effort$EffortSiteID_UTMZone_End
-effort$UTME <- effort$EffortSiteID_Easting_End
-effort$UTMN <- effort$EffortSiteID_Northing_End
-effort$survey.type <- effort$EffortSurveyType
-effort$gear.type <- effort$EffortGearType
-effort$mesh <- effort$EffortMeshSize
-effort$net.cond <- effort$EffortNetCond
-effort$bottom.depth1 <- effort$EffortBottomDepth1
-effort$bottom.depth3 <- effort$EffortBottomDepth3
-effort$gear.depth.top <- effort$EffortGearDepthTop 
-effort$gear.depth.bot <- effort$EffortGearDepthBottom
-effort$effort.comments <- effort$EffortComments 
-
-#QA#
-
-#effort[which(effort$soaktime <=0),]
-#effort[which(effort$UTME == 111111),]
-#Visual: effort[,c("month","season")]
-#which(effort[,"season"]=="NA") #should be "integer(0). If not, 
-#there is an uncoded season in the effort data 
-
-
-# subset:
-effort <- effort[,c("EffortAutoNumber","field.ID","yr","season","start.date.time",
-                    "end.date.time","soaktime","shoal","UTMZ","UTME","UTMN","survey.type",
-                    "gear.type","mesh","net.cond","bottom.depth1","bottom.depth3",
-                    "gear.depth.top","gear.depth.bot","effort.comments")]
 
 
 
-### Merge Env measures with effort
 
-env$EffortAutoNumber <- env$Effort_AutoNumber
-env$method <- env$ENVSamplingTool 
-env$secchi <- env$ENV_SecchiDepth
-env$temp <- env$ENV_H2OTemp
-env$wind.dir <- env$ENV_WindDirection
-env$wind.spd <- env$ENV_WindSpeed 
-env$env.comments <- env$ENV_Comments
+#### EFFORT ####
 
-env.merge <- env[,c("EffortAutoNumber","ENVAutoNumber","method","secchi",
-                    "temp","wind.dir","wind.spd","env.comments")]
-# ***note: in cases where there are multiple env measures per effort, 
-# this merge will create duplicate effort IDs. Which will mess up 
-# other matches. 
-anyDuplicated(env.merge$EffortAutoNumber)
+effortR <- effort %>% 
+  mutate(field.ID = as.character(EffortFieldNumber),yr = year(EffortEndDateTime), month = month(EffortEndDateTime),
+         season = factor(case_when(month %in% c(12,1,2) ~ "winter",
+                            month %in% c(3,4,5) ~ "spring",
+                            month %in% c(6,7,8) ~ "summer",
+                            month %in% c(9,10,11) ~ "fall"), ordered=T, 
+                         levels = c("winter","spring","summer","fall"))) %>% 
+  mutate(soaktime = round(difftime(EffortEndDateTime, EffortStartDateTime, units = "hours"),2)) %>% 
+  select(EffortAutoNumber,field.ID, st.datetime=EffortStartDateTime, end.datetime=EffortEndDateTime, yr, month, 
+         season, soaktime, shoal=EffortSpawningShoal, UTMZ=EffortSiteID_UTMZone_End, UTME=EffortSiteID_Easting_End,
+         UTMN=EffortSiteID_Northing_End, survey.type=EffortSurveyType, gear.type=EffortGearType,
+         mesh=EffortMeshSize, net.cond=EffortNetCond, bottom.depth1=EffortBottomDepth1, 
+         bottom.depth3 = EffortBottomDepth3, gear.depth.top = EffortGearDepthTop, 
+         gear.depth.bot=EffortGearDepthBottom)
+  
+#exception - to fix sometime and bring into tidyverse. Maybe reclassify season by date break (i.e. mid-sept)?
+effortR[which(effortR$yr %in% c(2008,2009) & effortR$month %in% 9), "season"] <- "fall"
 
-effort <- merge(effort,env.merge, all.x=TRUE)
 
-#QA# 
 
-effort[duplicated(paste(effort$start.date.time,effort$end.date.time)),1:16]
+#### Effort QA####
+
+#which gillnetting efforts have a soaktime of 0? 
+effortR %>% 
+  filter(soaktime <= 0) %>% 
+  filter(gear.type %in% c("RIC6 SGN - 6 Panel Sinking Gillnet","RIC6 FGN - 6 Panel Floating Gillnet",
+                          "RIC7 SGN - 7 Panel Sinking Gillnet","SLIN - Spring Littoral Index Netting Gillnet"))
+#which efforts do not have their locations defined? Probably lots at the moment, should go back and correct these
+effortR %>%
+  filter(UTME == 111111)
+
+#visual check to see that months were correctly classified into seasons
+unique(effortR[,c("month","season")])
+
+#any rows not fall into a season?
+which(is.na(effortR$season))
+
 #These Effort IDs have a duplicate time/date that is not shown here. 
 # Go look in the database for the duplicates and assess. Some of these
 # may be a result of two crews working at the same time in spring, 
 # so they are fine.
+effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
 
 
-#### Merge catches (measured and unmeasured)
 
-catch$EffortAutoNumber <- catch$EffortAutoNumber_AllFish
-catch$species <- catch$CaptureSpecies
-catch$count <- 1
-catch$FL <- catch[,"CaptureFork Length"]
-catch$WT <- catch$CaptureWeight
-catch$condition <- (100000*catch$WT)/(catch$FL^3)
-catch$in.offshore <- catch$CaptureShore
-catch$maturity <- catch$CaptureMaturity
-catch$fate <- catch$CaptureFate
-catch$stomach1 <- catch$CaptureStomachCnts1
-catch$stomach.comm1 <- catch$CaptureStomachComm1
-catch$comments <- catch$CaptureComments
 
-#attribute fish sex from LT.ID table
-catch$sex <- NA
-LT.ID$FishSex <- as.character(LT.ID$FishSex)
-for (i in 1:nrow(catch)){
-  catch$sex[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"FishSex"]
-}
+
+#### ENV ####
+
+#tidy up ENV data 
+envR <- env %>% 
+  select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, temp=ENV_H2OTemp,
+         wind.dir = ENV_WindDirection, wind.spd = ENV_WindSpeed)
+
+### Temp join Env measures with Effort
+
+effortR <- effortR %>% 
+  left_join(envR, by="EffortAutoNumber")
+
+# ***note: in cases where there are multiple env measures per effort, 
+# this merge will create duplicate effort IDs. Which will mess up 
+# other matches.Currently don't have any, but need to check if there are any
+anyDuplicated(effortR$EffortAutoNumber)
+
+
+
+
+
+#### CATCH and BYCATCH ####
+
+#get sex from LT.ID table
+sexR <- LT.ID %>% 
+  mutate(sex = as.character(FishSex)) %>% 
+  select(LTFishIDAutonumber, sex)
+
+catchR <- catch %>% 
+  select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
+         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate) %>% 
+  mutate(condition=(100000*WT)/(FL^3), count=1) %>% 
+  left_join(sexR, by= "LTFishIDAutonumber")
+  
+
+# catch$EffortAutoNumber <- catch$EffortAutoNumber_AllFish
+# catch$species <- catch$CaptureSpecies
+# catch$count <- 1
+# catch$FL <- catch[,"CaptureFork Length"]
+# catch$WT <- catch$CaptureWeight
+# catch$condition <- (10^5*catch$WT)/(catch$FL^3)
+# catch$in.offshore <- catch$CaptureShore
+# catch$maturity <- catch$CaptureMaturity
+# catch$fate <- catch$CaptureFate
+# catch$stomach1 <- catch$CaptureStomachCnts1
+# catch$stomach.comm1 <- catch$CaptureStomachComm1
+# catch$comments <- catch$CaptureComments
+
+
+
+
+
+
+
+
 
 #attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
 ################## RICKS MODS ################## to calculate age if it survived to 2017
