@@ -1,20 +1,30 @@
 
 #### This script is meant to import and clean up data from the Moberly Lake Database #
 #### This can be run in other scripts with source("Mob_Db_connect.R") #
+#### NOTE: you need to be running the 32-bit version of R to be able to connect to the Access Db, 
+#### depending on the driver installed on your computer. 
+#         You can do this with Tools -> Global Options -> General and select the 32-bit version in "R version"
 
 
 ### Author: Kristen Peck, Dec-2017
 
-#install.packages("RODBC","dplyr")
+#install.packages("RODBC")
 
 library(RODBC)
 library(dplyr)
 library(lubridate)
 
 #Open "channel" to database to extract data tables. Close connection when done #
-# CHECK CURRENT NAME OF MASTER DB if this doesn't work
+# Troubleshooting Issues:
+# CHECK NAME OF MASTER DB and file path if this doesn't work. 
+# Try the other "bit" version of R (32-bit or 64-bit)
+# after "refresh" the driver may not be installed correctly. 
+# Read thru this site and see if it helps: https://docs.microsoft.com/en-us/office/troubleshoot/access/cannot-use-odbc-or-oledb
+# I installed a 64-bit driver (why did this work?) and it solved my connection issues
+
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
+
 
 #sqlTables(ch,tableType = "TABLE")
 
