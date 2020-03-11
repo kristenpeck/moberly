@@ -117,10 +117,11 @@ sexR <- LT.ID %>%
   mutate(sex = as.character(FishSex)) %>% 
   select(LTFishIDAutonumber, sex)
 
+str(catch)
 catchR <- catch %>% 
   select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
-         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate) %>% 
-  mutate(condition=(100000*WT)/(FL^3), count=1) %>% 
+         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate, datetime = CaptureDate) %>% 
+  mutate(condition=(100000*WT)/(FL^3), count=1, yr=year(datetime), species = as.character(species)) %>% 
   left_join(sexR, by= "LTFishIDAutonumber")
 
 str(catchR)  
@@ -164,8 +165,11 @@ for (i in 1:nrow(catch)){
 
 ##bycatch
 
+str(bycatch)
 bycatchR <- bycatch %>% 
-  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, count = ByCatchCount) 
+  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, count = ByCatchCount,
+         datetime = ByCatchDate) %>% 
+  mutate(yr = year(datetime), species = as.character(species))
 
 
 #bycatch$EffortAutoNumber <- bycatch$EffortAutoNumber_ByCatch
@@ -199,9 +203,11 @@ bycatchR <- bycatch %>%
 #                             "species","count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
 #                             "stomach.comm1","comments","CaptureIDAutoNumber")]
 
+str(catchR)
+str(bycatchR)
 
 catch.all <- catchR %>% 
-  full_join(bycatchR)
+  full_join(bycatchR) #for some reason this seems to be eliminating some rows of bycatch. See effort 3516 to see what I mean
 str(catch.all)
 
 catch.all$catchID <- 1:nrow(catch.all)
@@ -223,6 +229,15 @@ effort.catch[which(is.na(effort.catch$catchID)),"species"] <- "NFC"
 which(is.na(effort.catch$species)) #should be "integer(0)"
 
 
+
+### Small Queries ####
+
+#how many fish were caught on shoals in 2019?
+str(catch.all)
+
+catch.all %>%
+  filter(yr %in% 2019) %>% 
+  filter(species %in% "LT")
 
 
 
