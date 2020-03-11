@@ -122,7 +122,9 @@ catchR <- catch %>%
          FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate) %>% 
   mutate(condition=(100000*WT)/(FL^3), count=1) %>% 
   left_join(sexR, by= "LTFishIDAutonumber")
-  
+
+str(catchR)  
+
 
 # catch$EffortAutoNumber <- catch$EffortAutoNumber_AllFish
 # catch$species <- catch$CaptureSpecies
@@ -139,24 +141,19 @@ catchR <- catch %>%
 
 
 
-
-
-
-
-
-
 #attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
-################## RICKS MODS ################## to calculate age if it survived to 2017
-LT.ID$yr.class <- as.numeric(substr(LT.ID$FishFinal_Age_Date,1,4))-LT.ID$FishFinal_Age
-LT.ID$age18 <- 2018 - as.numeric(substr(LT.ID$FishFinal_Age_Date,1,4)) + LT.ID$FishFinal_Age
+################## RICKS MODS ################## to calculate age if it survived to 2019
+LT.ID$yr.class <- year(LT.ID$FishFinal_Age_Date)-LT.ID$FishFinal_Age
 
-################## END RICKS MODS ##############
-LT.ID$yr.class <- as.numeric(substr(LT.ID$FishFinal_Age_Date,1,4))-LT.ID$FishFinal_Age
 
-catch$yr.class <- NA
-for (i in 1:nrow(catch)){
-  catch$yr.class[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"yr.class"]
-}
+LT.ID$ageat2019 <- 2019-LT.ID$yr.class #this is assuming everyone has survived, which is not true - add in mort data
+hist(LT.ID$ageat2019)
+
+#
+#catch$yr.class <- NA
+#for (i in 1:nrow(catch)){
+#  catch$yr.class[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"yr.class"]
+#}
 
 #attribute hatchery cohort from LT.ID table
 catch$cohort <- NA
@@ -167,49 +164,55 @@ for (i in 1:nrow(catch)){
 
 ##bycatch
 
+bycatchR <- bycatch %>% 
+  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, count = ByCatchCount) 
 
-bycatch$EffortAutoNumber <- bycatch$EffortAutoNumber_ByCatch
-bycatch$LTFishID_Autonumber <- NA
-bycatch$species <- bycatch$ByCatchSpecies
-bycatch$count <- bycatch$ByCatchCount
-bycatch$in.offshore <- bycatch$ByCatchShore
-bycatch$comments <- bycatch$ByCatchComments
 
-bycatch$FL <- NA
-bycatch$WT<- NA
-bycatch$condition <- NA
-bycatch$yr.class <- NA
-bycatch$cohort <- NA
-bycatch$maturity<- NA
-bycatch$fate<- NA
-bycatch$stomach1<- NA
-bycatch$stomach.comm1<- NA
-bycatch$sex <- NA
+#bycatch$EffortAutoNumber <- bycatch$EffortAutoNumber_ByCatch
+#bycatch$LTFishID_Autonumber <- NA
+#bycatch$species <- bycatch$ByCatchSpecies
+#bycatch$count <- bycatch$ByCatchCount
+#bycatch$in.offshore <- bycatch$ByCatchShore
+#bycatch$comments <- bycatch$ByCatchComments
 
-bycatch$CaptureIDAutoNumber <- NA
-catch$SummaryCaptureIDAutoNumber <- NA
+# bycatch$FL <- NA
+# bycatch$WT<- NA
+# bycatch$condition <- NA
+# bycatch$yr.class <- NA
+# bycatch$cohort <- NA
+# bycatch$maturity<- NA
+# bycatch$fate<- NA
+# bycatch$stomach1<- NA
+# bycatch$stomach.comm1<- NA
+# bycatch$sex <- NA
+# 
+# bycatch$CaptureIDAutoNumber <- NA
+# catch$SummaryCaptureIDAutoNumber <- NA
 
 
 #merge catches:
 
-catch.merge <- catch[,c("EffortAutoNumber","CaptureIDAutoNumber","LTFishID_Autonumber","species",
-                        "count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
-                        "stomach.comm1","comments","SummaryCaptureIDAutoNumber")]
-bycatch.merge <- bycatch[,c("EffortAutoNumber","SummaryCaptureIDAutoNumber","LTFishID_Autonumber",
-                            "species","count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
-                            "stomach.comm1","comments","CaptureIDAutoNumber")]
+#catch.merge <- catch[,c("EffortAutoNumber","CaptureIDAutoNumber","LTFishID_Autonumber","species",
+#                         "count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
+#                         "stomach.comm1","comments","SummaryCaptureIDAutoNumber")]
+# bycatch.merge <- bycatch[,c("EffortAutoNumber","SummaryCaptureIDAutoNumber","LTFishID_Autonumber",
+#                             "species","count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
+#                             "stomach.comm1","comments","CaptureIDAutoNumber")]
 
-catch.all <- rbind(catch.merge, bycatch.merge)
+
+catch.all <- catchR %>% 
+  full_join(bycatchR)
+str(catch.all)
+
 catch.all$catchID <- 1:nrow(catch.all)
 
 str(catch.all)
 
 
-
-
 ### Merge efforts with catches ##
 
-effort.catch <- merge(effort, catch.all, all.x=T)
+effort.catch <- effortR %>% 
+  full_join(catch.all)
 
 str(effort.catch)
 
@@ -226,7 +229,7 @@ which(is.na(effort.catch$species)) #should be "integer(0)"
 
 ###############################################
 ###############################################
-##########    QA     ##########################
+##########    QA     ########################## NOT YET UPDATED KP/10-March-2020
 ###############################################
 ###############################################
 
@@ -235,11 +238,11 @@ which(is.na(effort.catch$species)) #should be "integer(0)"
 ### QA effort 
 
 ## Check list of surveys: 
+str(effortR)
+effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
+effortR <- effortR[order(effortR$season.yr.survey),]
 
-effort$season.yr.survey <- paste(effort$yr, effort$season, effort$survey.type)
-effort <- effort[order(effort$season.yr.survey),]
-
-uniq <- data.frame(table(effort$season.yr.survey))
+uniq <- data.frame(table(effortR$season.yr.survey))
 colnames(uniq) <- c("Sampling Event","Number of Efforts")
 uniq$Year <- substr(uniq[,1], 1,4)
 
