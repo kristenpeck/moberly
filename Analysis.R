@@ -1,39 +1,61 @@
-#clear the workspace
-#rm(list=ls())
+
+# This script is for general analysis to do with CPUE, length at age, general fish summaries
+# It does not include the Mark-Recap population analysis- this is in MR_Analysis
+
+#Authir: Rick Elsner/ Kristen Peck
 
 ### Note: to run the Mob_Db_connect you must be using the 
-# 32 bit version of R (can change this in Tools-> Global Options)
+# 32 bit version of R (can change this in Tools-> Global Options). Or the 64-bit version, depending on your driver
 
 #setwds
-outputs2018 <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
-Db.connect <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
+# outputs2018 <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
+# Db.connect <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
 
-library(data.table)
 library(FSA)
-library(RMark)
-library(RODBC)
+library(plyr); library(dplyr)
+
+
+# library(data.table)
+# library(FSA)
+# library(RMark)
+# library(RODBC)
+# library(car)
+
+options(digits=4) #limits printed numbers to 4 sig. digits
 
 
 ########################################
 #### Run Moberly LT Database script ####
 ########################################
 
-setwd(Db.connect) # from above
-
-# make sure Mob_Db_connect.R below is saved before proceeding.
-source("Mob_Db_connect.R")
+# run DB_connect script to load and clean the data from the database.
+source("DB_connect.R")
 ls()
 
-# poking around ####
-#headtail(tmp  <- effort.catch %>% filterD(EffortAutoNumber,survey.type=="Spawner Sampling"|survey.type=="Spawner Sampling/Tagging",
-#                                          species=="LT") %>%
-#           mutate(species=as.factor(species),
-#                  yr=as.factor(yr),
-#                  cohort=as.factor(cohort))) #use filter to analyze different years, sizes, lakes, etc
 
-#headtail(tmp  <- effort.catch %>% filterD(EffortAutoNumber,!survey.type=="Hatchery Survival at Release",
-#                                          species=="LT",FL<=400,!is.na(cohort)) %>%
-#           mutate(species=as.factor(species),yr=as.factor(yr),cohort=as.factor(cohort))) #use filter to analyze different years, sizes, lakes, etc
+#### Summarize basic data ####
+
+str(effort.catch)
+
+year = 2019
+
+unique(effort.catch$survey.type)
+survey = "Spawner Sampling/Tagging"
+
+
+# how many LT were caught in given year during a given survey?
+
+temp <- effort.catch %>% 
+  filter(species %in% "LT") %>% 
+  filter(yr %in% year) %>% 
+  filter(survey.type %in% survey)
+
+summarise(temp, 
+          tot.nets = length(unique(EffortAutoNumber)),
+          tot.uniqueLT = length(unique(LTFishIDAutonumber)),
+          tot.males = length(which(sex %in% "m")))
+
+temp$LTFishIDAutonumber[which(duplicated(temp$LTFishIDAutonumber))]
 
 
 #############################################
@@ -41,7 +63,9 @@ ls()
 #############################################
 # FL for Spawner surveys by year for Males only 2008 and later after more effort 
 # put into mark recapture netting
+str(effort.catch)
 levels(effort.catch$survey.type)
+unique(effort.catch$yr)
 
 headtail(tmp  <- effort.catch %>% 
            filterD(EffortAutoNumber,

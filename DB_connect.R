@@ -8,7 +8,7 @@
 
 ### Author: Kristen Peck, Dec-2017
 
-#install.packages("RODBC")
+#install.packages("RODBC", "dplyr", "lubridate")
 
 library(RODBC)
 library(dplyr)
@@ -35,6 +35,11 @@ bycatch <- sqlFetch(ch,"TABLE - By-Catch Summary Capture Info")
 LT.ID <-  sqlFetch(ch,"TABLE - Specific Fish ID Info")
 
 odbcCloseAll()
+
+
+
+# ACTIONS TO DO: ####
+# - mark whether fish is recap or not in any given year to quickly summarize
 
 
 
@@ -250,210 +255,210 @@ catch.all %>%
 
 
 
-### QA effort 
-
-## Check list of surveys: 
-str(effortR)
-effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
-effortR <- effortR[order(effortR$season.yr.survey),]
-
-uniq <- data.frame(table(effortR$season.yr.survey))
-colnames(uniq) <- c("Sampling Event","Number of Efforts")
-uniq$Year <- substr(uniq[,1], 1,4)
-
-uniq
-
-
-#setwd(Db.connect)
-#write.csv(uniq, "sampling events.csv", row.names=F)
-
-
-
-
-### QA catch
-
-# check for NFCs (efforts without corresponding catch) with additional catches
-#nfcs <- catch.all[which(catch.all$species=="NFC"),"catchID"]
-#catch.all[which(catch.all$catchID==nfcs),]
-#length(nfcs)== nrow(catch.all[which(catch.all$catchID==nfcs),])
-# If there are no errors, this should be "TRUE"
-
-catch[which(catch$species=="LT"),30:36]
-str(catch)
-
-
-
-
-
-### QA LT.IDs 
-
-LT <- LT.ID[(which(LT.ID$FishSpecies=="LT")),]
-str(LT)
-
-#check if any have dec tag, but no hex tag (preferred). Should be "integer(0)"
-which(!is.na(LT$LTPitTag_DEC_ID_1)& is.na(LT$LTPitTag_HEX_ID_1))
-which(!is.na(LT$LTPitTag_DEC_ID_2)& is.na(LT$LTPitTag_HEX_ID_2))
-which(!is.na(LT$LTPitTag_DEC_ID_3)& is.na(LT$LTPitTag_HEX_ID_3))
-
-#check if any have duplicate tag information (PIT tags)
-#simple:
-dup <- data.frame(table(LT$LTPitTag_HEX_ID_1))
-dup[which(dup[,2]>1),1]
-
-#complex:
-
-LT$LTPitTag_HEX_ID_1 <- as.character(LT$LTPitTag_HEX_ID_1)
-LT$LTPitTag_HEX_ID_2 <- as.character(LT$LTPitTag_HEX_ID_2)
-LT$LTPitTag_HEX_ID_3 <- as.character(LT$LTPitTag_HEX_ID_3)
-
-LT$tags <- paste(LT$LTPitTag_HEX_ID_1, LT$LTPitTag_HEX_ID_2, LT$LTPitTag_HEX_ID_3)
-
-hex1 <- NA
-length(hex1) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  hex1[i] <- length(which(grepl(LT$LTPitTag_HEX_ID_1[i],LT$tags)== TRUE))
-}
-LT[which(hex1 > 1),c("LTFishIDAutonumber","tags")] 
-#Fish # 642 + 503 not currently fixable, but pay attention to others
-
-hex2 <- NA
-length(hex2) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  hex2[i] <- length(which(grepl(LT$LTPitTag_HEX_ID_2[i],LT$tags)== TRUE))
-}
-LT[which(hex2 > 1),c("LTFishIDAutonumber","tags")]
-
-
-#check if any have duplicate tag information (floy tags)
-#simple:
-dup <- data.frame(table(LT$LTFLOYID1))
-dup[which(dup[,2]>1),1]
-#complex:
-
-LT$LTFLOYID1 <- as.character(LT$LTFLOYID1)
-LT$LTFLOYID2 <- as.character(LT$LTFLOYID2)
-LT$LTFLOYID3 <- as.character(LT$LTFLOYID3)
-LT$LTFLOYID4 <- as.character(LT$LTFLOYID4)
-
-LT$floys <- paste(LT$LTFLOYID1, LT$LTFLOYID2, LT$LTFLOYID3, LT$LTFLOYID4)
-
-floy1 <- NA
-length(floy1) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  floy1[i] <- length(which(grepl(LT$LTFLOYID1[i],LT$floys)== TRUE))
-}
-LT[which(floy1 > 1),c("LTFishIDAutonumber","floys")] 
-
-floy2 <- NA
-length(floy2) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  floy2[i] <- length(which(grepl(LT$LTFLOYID2[i],LT$floys)== TRUE))
-}
-LT[which(floy2 > 1),c("LTFishIDAutonumber","floys")] 
-
-floy3 <- NA
-length(floy3) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  floy3[i] <- length(which(grepl(LT$LTFLOYID3[i],LT$floys)== TRUE))
-}
-LT[which(floy3 > 1),c("LTFishIDAutonumber","floys")] 
-
-floy4 <- NA
-length(floy4) <- nrow(LT)
-for (i in 1:nrow(LT)){
-  floy4[i] <- length(which(grepl(LT$LTFLOYID4[i],LT$floys)== TRUE))
-}
-LT[which(floy4 > 1),c("LTFishIDAutonumber","floys")] 
-
-
-
-
-# ** indiciate which fish are the unidentifiable re-caps
-# Check out Recap Identifier field
-
-#****don't use the Recap identifier for now
-LT[,1:6]
-levels(LT$LTRecapIdentifier)
-
-LT[which(LT$LTRecapIdentifier=="Hatchery Cohort" & is.na(LT$LTCohortYr)),]
-LT[which(!is.na(LT$LTRecapIdentifier)),c("LTFishIDAutonumber","LTRecapIdentifier","LTCohortYr","FishComments")]
-
-levels(LT$LTRecapIdentifier)
-#aborted- need to clean up this field and make more useful
-
-
-
-#check which Lakers don't have a catch record
-
-LT[which(LT$LTFishIDAutonumber %in% catch$LTFishID_Autonumber == FALSE),1:6]
-
-#the problematic records appear to be 9000 to 11552. Not sure what the other ones were.. misfires?
-
-
-
-
-
-
-
-
-#### 
-#### TO DO
-####
-
-#**write script to give summary of captures of individual fish IDs 
-
-
-
-
-
-
-
-# QA effort.catch
-
-event <- levels(as.factor(effort.catch$season.yr.survey))
-
-dupe <- effort.catch[1:length(event),]; 
-
-i=3
-effort.catch[which(duplicated(effort.catch[which(effort.catch$season.yr.survey == event[i]),
-                                           c("LTFishID_Autonumber","species","FL","WT","count","sex")])==TRUE),]
-
-effort.catch$qa.field1 <- paste(effort.catch$season.yr.survey,effort.catch$species,effort.catch$FL,
-                                effort.catch$WT,effort.catch$sex)
-
-
-
-#QA routines to write:
-#write chunk for list of surveys that have occurred and how many efforts, 
-#catch and by-catch they all have -> for review post-data entry
-#write script for any LTs that have wt but no FL
-#check if duplicate LT.ID'ing parameters
-# translate x,y,z over from site ID
-
-
-
-
-
-#for clean "source" run in other scripts:
-
-
-rm("ch","bycatch.merge","catch.merge","env.merge","i","dup","dupe","floy1","floy2",
-   "floy4","hex1","hex2","event","floy3","uniq")
+# ### QA effort 
+# 
+# ## Check list of surveys: 
+# str(effortR)
+# effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
+# effortR <- effortR[order(effortR$season.yr.survey),]
+# 
+# uniq <- data.frame(table(effortR$season.yr.survey))
+# colnames(uniq) <- c("Sampling Event","Number of Efforts")
+# uniq$Year <- substr(uniq[,1], 1,4)
+# 
+# uniq
+# 
+# 
+# #setwd(Db.connect)
+# #write.csv(uniq, "sampling events.csv", row.names=F)
+# 
+# 
+# 
+# 
+# ### QA catch
+# 
+# # check for NFCs (efforts without corresponding catch) with additional catches
+# #nfcs <- catch.all[which(catch.all$species=="NFC"),"catchID"]
+# #catch.all[which(catch.all$catchID==nfcs),]
+# #length(nfcs)== nrow(catch.all[which(catch.all$catchID==nfcs),])
+# # If there are no errors, this should be "TRUE"
+# 
+# catch[which(catch$species=="LT"),30:36]
+# str(catch)
+# 
+# 
+# 
+# 
+# 
+# ### QA LT.IDs 
+# 
+# LT <- LT.ID[(which(LT.ID$FishSpecies=="LT")),]
+# str(LT)
+# 
+# #check if any have dec tag, but no hex tag (preferred). Should be "integer(0)"
+# which(!is.na(LT$LTPitTag_DEC_ID_1)& is.na(LT$LTPitTag_HEX_ID_1))
+# which(!is.na(LT$LTPitTag_DEC_ID_2)& is.na(LT$LTPitTag_HEX_ID_2))
+# which(!is.na(LT$LTPitTag_DEC_ID_3)& is.na(LT$LTPitTag_HEX_ID_3))
+# 
+# #check if any have duplicate tag information (PIT tags)
+# #simple:
+# dup <- data.frame(table(LT$LTPitTag_HEX_ID_1))
+# dup[which(dup[,2]>1),1]
+# 
+# #complex:
+# 
+# LT$LTPitTag_HEX_ID_1 <- as.character(LT$LTPitTag_HEX_ID_1)
+# LT$LTPitTag_HEX_ID_2 <- as.character(LT$LTPitTag_HEX_ID_2)
+# LT$LTPitTag_HEX_ID_3 <- as.character(LT$LTPitTag_HEX_ID_3)
+# 
+# LT$tags <- paste(LT$LTPitTag_HEX_ID_1, LT$LTPitTag_HEX_ID_2, LT$LTPitTag_HEX_ID_3)
+# 
+# hex1 <- NA
+# length(hex1) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   hex1[i] <- length(which(grepl(LT$LTPitTag_HEX_ID_1[i],LT$tags)== TRUE))
+# }
+# LT[which(hex1 > 1),c("LTFishIDAutonumber","tags")] 
+# #Fish # 642 + 503 not currently fixable, but pay attention to others
+# 
+# hex2 <- NA
+# length(hex2) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   hex2[i] <- length(which(grepl(LT$LTPitTag_HEX_ID_2[i],LT$tags)== TRUE))
+# }
+# LT[which(hex2 > 1),c("LTFishIDAutonumber","tags")]
+# 
+# 
+# #check if any have duplicate tag information (floy tags)
+# #simple:
+# dup <- data.frame(table(LT$LTFLOYID1))
+# dup[which(dup[,2]>1),1]
+# #complex:
+# 
+# LT$LTFLOYID1 <- as.character(LT$LTFLOYID1)
+# LT$LTFLOYID2 <- as.character(LT$LTFLOYID2)
+# LT$LTFLOYID3 <- as.character(LT$LTFLOYID3)
+# LT$LTFLOYID4 <- as.character(LT$LTFLOYID4)
+# 
+# LT$floys <- paste(LT$LTFLOYID1, LT$LTFLOYID2, LT$LTFLOYID3, LT$LTFLOYID4)
+# 
+# floy1 <- NA
+# length(floy1) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   floy1[i] <- length(which(grepl(LT$LTFLOYID1[i],LT$floys)== TRUE))
+# }
+# LT[which(floy1 > 1),c("LTFishIDAutonumber","floys")] 
+# 
+# floy2 <- NA
+# length(floy2) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   floy2[i] <- length(which(grepl(LT$LTFLOYID2[i],LT$floys)== TRUE))
+# }
+# LT[which(floy2 > 1),c("LTFishIDAutonumber","floys")] 
+# 
+# floy3 <- NA
+# length(floy3) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   floy3[i] <- length(which(grepl(LT$LTFLOYID3[i],LT$floys)== TRUE))
+# }
+# LT[which(floy3 > 1),c("LTFishIDAutonumber","floys")] 
+# 
+# floy4 <- NA
+# length(floy4) <- nrow(LT)
+# for (i in 1:nrow(LT)){
+#   floy4[i] <- length(which(grepl(LT$LTFLOYID4[i],LT$floys)== TRUE))
+# }
+# LT[which(floy4 > 1),c("LTFishIDAutonumber","floys")] 
+# 
+# 
+# 
+# 
+# # ** indiciate which fish are the unidentifiable re-caps
+# # Check out Recap Identifier field
+# 
+# #****don't use the Recap identifier for now
+# LT[,1:6]
+# levels(LT$LTRecapIdentifier)
+# 
+# LT[which(LT$LTRecapIdentifier=="Hatchery Cohort" & is.na(LT$LTCohortYr)),]
+# LT[which(!is.na(LT$LTRecapIdentifier)),c("LTFishIDAutonumber","LTRecapIdentifier","LTCohortYr","FishComments")]
+# 
+# levels(LT$LTRecapIdentifier)
+# #aborted- need to clean up this field and make more useful
+# 
+# 
+# 
+# #check which Lakers don't have a catch record
+# 
+# LT[which(LT$LTFishIDAutonumber %in% catch$LTFishID_Autonumber == FALSE),1:6]
+# 
+# #the problematic records appear to be 9000 to 11552. Not sure what the other ones were.. misfires?
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# #### 
+# #### TO DO
+# ####
+# 
+# #**write script to give summary of captures of individual fish IDs 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# # QA effort.catch
+# 
+# event <- levels(as.factor(effort.catch$season.yr.survey))
+# 
+# dupe <- effort.catch[1:length(event),]; 
+# 
+# i=3
+# effort.catch[which(duplicated(effort.catch[which(effort.catch$season.yr.survey == event[i]),
+#                                            c("LTFishID_Autonumber","species","FL","WT","count","sex")])==TRUE),]
+# 
+# effort.catch$qa.field1 <- paste(effort.catch$season.yr.survey,effort.catch$species,effort.catch$FL,
+#                                 effort.catch$WT,effort.catch$sex)
+# 
+# 
+# 
+# #QA routines to write:
+# #write chunk for list of surveys that have occurred and how many efforts, 
+# #catch and by-catch they all have -> for review post-data entry
+# #write script for any LTs that have wt but no FL
+# #check if duplicate LT.ID'ing parameters
+# # translate x,y,z over from site ID
+# 
+# 
+# 
+# 
+# 
+# #for clean "source" run in other scripts:
+# 
+# 
 ls()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ rm("ch","bycatch","catch","env","effort","i", "sexR")
+# ls()
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
 
 
 
