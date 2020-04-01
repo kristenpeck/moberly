@@ -26,25 +26,26 @@ ls()
 ######################################
 
 effort.catch$season.yr <- ifelse(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling",
-	paste0(substr(effort.catch$season,2,8),effort.catch$yr),NA)
+	paste0(substr(effort.catch$season,1,8),effort.catch$yr),NA)
 
 events.df <-unique(effort.catch[which(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling"),
 	c("yr","season","survey.type")])
 events.df <- events.df[order(events.df$yr),]
 
-events.df$season.yr <- paste0(substr(events.df$season,2,8),events.df$yr)
+events.df$season.yr <- paste0(substr(events.df$season,1,8),events.df$yr)
 
 #events <- events.df$season.yr # all years since 2005
 (events <- events.df$season.yr[c(0,4:14)]) # all years since 2008
 
+str(effort.catch)
 LT.catch <- effort.catch[which(effort.catch$species=="LT"),]
 
 #take out any LT that were lost from the nets (and therefore have no ID)
-LT.catch <- LT.catch[which(!is.na(LT.catch$LTFishID_Autonumber)),]
+#### LT.catch <- LT.catch[which(!is.na(LT.catch$LTFishID_Autonumber)),]
 
 
-#SIDENOTE: for interest, generate a table with how many recaps per individual and the max recaps
-recaps <- data.frame(table(LT.catch$LTFishID_Autonumber));colnames(recaps) <- c("LT auto ID","times recapped")
+#Query: for interest, generate a table with how many recaps per individual and the max recaps
+recaps <- data.frame(table(LT.catch$LTFishIDAutonumber));colnames(recaps) <- c("LT auto ID","times recapped")
 (recaps[which(recaps[,2]==max(recaps[,2])),])
 (props <- xtabs(~recaps$`times recapped`))
  
@@ -54,10 +55,10 @@ recaps <- data.frame(table(LT.catch$LTFishID_Autonumber));colnames(recaps) <- c(
 
 #### Capture Histories ####
 #make capture histories for all fish, but only the events for fall will be identified
-ch <- data.frame(MSAccess_Fish_ID=LT.catch$LTFishID_Autonumber)
-ch$sex <- LT.catch$sex
-ch$yr.class <- LT.catch$yr.class
-ch$event <- LT.catch$season.yr
+caphist <- data.frame(MSAccess_Fish_ID=LT.catch$LTFishIDAutonumber)
+caphist$sex <- LT.catch$sex
+$yr.class <- LT.catch$yr.class
+$event <- LT.catch$season.yr
 ch$freq <- as.character(LT.catch$fate)
 ch <- ch %>%  mutate(freq = as.numeric(ifelse(freq=="m",-1, # assumes morts -1
                       ifelse(!freq=="m?"|freq=="a",1,NA)))) %>% # if unsure of mort then assumed alive

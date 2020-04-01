@@ -51,10 +51,12 @@ temp <- effort.catch %>%
   filter(survey.type %in% survey)
 
 summarise(temp, 
+          year = year,
           tot.nets = length(unique(EffortAutoNumber)),
           tot.uniqueLT = length(unique(LTFishIDAutonumber)),
           tot.males = length(which(sex %in% "m")))
 
+# who was caught more than once during the survey?
 temp$LTFishIDAutonumber[which(duplicated(temp$LTFishIDAutonumber))]
 
 

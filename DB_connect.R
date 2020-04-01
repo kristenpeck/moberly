@@ -20,7 +20,7 @@ library(lubridate)
 # Try the other "bit" version of R (32-bit or 64-bit)
 # after "refresh" the driver may not be installed correctly. 
 # Read thru this site and see if it helps: https://docs.microsoft.com/en-us/office/troubleshoot/access/cannot-use-odbc-or-oledb
-# I installed a 64-bit driver (why did this work?) and it solved my connection issues
+# I installed a 64-bit driver and it solved my connection issues
 
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
@@ -122,7 +122,12 @@ sexR <- LT.ID %>%
   mutate(sex = as.character(FishSex)) %>% 
   select(LTFishIDAutonumber, sex)
 
+#assign whether the fish was a recap at any given point of capture
+
 str(catch)
+
+
+
 catchR <- catch %>% 
   select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
          FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate, datetime = CaptureDate) %>% 
