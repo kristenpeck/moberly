@@ -25,6 +25,8 @@ library(lubridate)
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
 
+#ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+#	DBQ=//Moberly Fish Database-copy11-May-2020.accdb")
 
 #sqlTables(ch,tableType = "TABLE")
 
@@ -48,22 +50,27 @@ odbcCloseAll()
 #### EFFORT ####
 
 effortR <- effort %>% 
-  mutate(field.ID = as.character(EffortFieldNumber),yr = year(EffortEndDateTime), month = month(EffortEndDateTime),
+  mutate(field.ID = as.character(EffortFieldNumber),yr = year(EffortEndDateTime), 
+         month = month(EffortEndDateTime),
+         day = as.numeric(day(EffortEndDateTime)),
          season = factor(case_when(month %in% c(12,1,2) ~ "winter",
-                            month %in% c(3,4,5) ~ "spring",
-                            month %in% c(6,7,8) ~ "summer",
-                            month %in% c(9,10,11) ~ "fall"), ordered=T, 
+                                   month %in% c(3,4,5) ~ "spring",
+                                   month %in% c(6,7,8) ~ "summer",
+                                   month %in% c(9) & day < 25 ~ "summer",
+                                   month %in% c(9) & day >= 25 ~ "fall", #in 2008, 2009 the fall survey started early
+                                   month %in% c(10,11) ~ "fall"), ordered=T, 
                          levels = c("winter","spring","summer","fall"))) %>% 
   mutate(soaktime = round(difftime(EffortEndDateTime, EffortStartDateTime, units = "hours"),2)) %>% 
-  select(EffortAutoNumber,field.ID, st.datetime=EffortStartDateTime, end.datetime=EffortEndDateTime, yr, month, 
-         season, soaktime, shoal=EffortSpawningShoal, UTMZ=EffortSiteID_UTMZone_End, UTME=EffortSiteID_Easting_End,
-         UTMN=EffortSiteID_Northing_End, survey.type=EffortSurveyType, gear.type=EffortGearType,
+  select(EffortAutoNumber,field.ID, st.datetime=EffortStartDateTime, 
+         end.datetime=EffortEndDateTime, yr, month, 
+         season, soaktime, shoal=EffortSpawningShoal, UTMZ=EffortSiteID_UTMZone_End, 
+         UTME=EffortSiteID_Easting_End, UTMN=EffortSiteID_Northing_End, 
+         survey.type=EffortSurveyType, gear.type=EffortGearType,
          mesh=EffortMeshSize, net.cond=EffortNetCond, bottom.depth1=EffortBottomDepth1, 
          bottom.depth3 = EffortBottomDepth3, gear.depth.top = EffortGearDepthTop, 
          gear.depth.bot=EffortGearDepthBottom)
-  
-#exception - to fix sometime and bring into tidyverse. Maybe reclassify season by date break (i.e. mid-sept)?
-effortR[which(effortR$yr %in% c(2008,2009) & effortR$month %in% 9), "season"] <- "fall"
+str(effortR)
+
 
 
 
@@ -79,7 +86,7 @@ effortR %>%
   filter(UTME == 111111)
 
 #visual check to see that months were correctly classified into seasons
-unique(effortR[,c("month","season")])
+arrange(unique(effortR[,c("month","season")]), by = month)
 
 #any rows not fall into a season?
 which(is.na(effortR$season))
@@ -100,7 +107,7 @@ effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
 envR <- env %>% 
   select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, temp=ENV_H2OTemp,
          wind.dir = ENV_WindDirection, wind.spd = ENV_WindSpeed)
-
+envR
 ### Temp join Env measures with Effort
 
 effortR <- effortR %>% 
@@ -108,7 +115,7 @@ effortR <- effortR %>%
 
 # ***note: in cases where there are multiple env measures per effort, 
 # this merge will create duplicate effort IDs. Which will mess up 
-# other matches.Currently don't have any, but need to check if there are any
+# other matches. Currently don't have any, but need to check if there are any
 anyDuplicated(effortR$EffortAutoNumber)
 
 
@@ -117,48 +124,44 @@ anyDuplicated(effortR$EffortAutoNumber)
 
 #### CATCH and BYCATCH ####
 
-#get sex from LT.ID table
-sexR <- LT.ID %>% 
-  mutate(sex = as.character(FishSex)) %>% 
-  select(LTFishIDAutonumber, sex)
+#get sex and age from LT.ID table and clean up catch table
+# sexR <- LT.ID %>% 
+#   mutate(sex = as.character(FishSex)) %>% 
+#   select(LTFishIDAutonumber, sex)
+yr.select <- 2019
 
-#assign whether the fish was a recap at any given point of capture
+LT.IDR <- LT.ID %>% 
+  mutate(sex = as.character(FishSex)) %>%
+  mutate(yr.class = year(FishFinal_Age_Date)-FishFinal_Age) %>% 
+  mutate(ageatyr.select = yr.select-yr.class) %>% 
+  mutate(hatchery = ifelse(!is.na(LTCohortYr), "yes","no")) %>% 
+  select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
 
-str(catch)
+# freq of fish of diff ages in the selected year
+hist(LT.IDR$ageatyr.select)
 
-
-
+#add sex, whether hatchery, and yr.class to catch
 catchR <- catch %>% 
   select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
-         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, fate=CaptureFate, datetime = CaptureDate) %>% 
-  mutate(condition=(100000*WT)/(FL^3), count=1, yr=year(datetime), species = as.character(species)) %>% 
-  left_join(sexR, by= "LTFishIDAutonumber")
+         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, 
+         fate=CaptureFate, datetime = CaptureDate) %>% 
+  mutate(condition=(100000*WT)/(FL^3), yr=year(datetime), 
+         species = as.character(species)) %>% 
+  mutate(count = ifelse(species %in% "NFC",0,1)) %>% 
+  left_join(LT.IDR, by= "LTFishIDAutonumber")
 
 str(catchR)  
 
+#assign whether the fish was a recap at any given point of capture
 
-# catch$EffortAutoNumber <- catch$EffortAutoNumber_AllFish
-# catch$species <- catch$CaptureSpecies
-# catch$count <- 1
-# catch$FL <- catch[,"CaptureFork Length"]
-# catch$WT <- catch$CaptureWeight
-# catch$condition <- (10^5*catch$WT)/(catch$FL^3)
-# catch$in.offshore <- catch$CaptureShore
-# catch$maturity <- catch$CaptureMaturity
-# catch$fate <- catch$CaptureFate
-# catch$stomach1 <- catch$CaptureStomachCnts1
-# catch$stomach.comm1 <- catch$CaptureStomachComm1
-# catch$comments <- catch$CaptureComments
 
 
 
 #attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
 ################## RICKS MODS ################## to calculate age if it survived to 2019
-LT.ID$yr.class <- year(LT.ID$FishFinal_Age_Date)-LT.ID$FishFinal_Age
-
-
-LT.ID$ageat2019 <- 2019-LT.ID$yr.class #this is assuming everyone has survived, which is not true - add in mort data
-hist(LT.ID$ageat2019)
+#LT.ID$yr.class <- year(LT.ID$FishFinal_Age_Date)-LT.ID$FishFinal_Age
+# LT.ID$ageat2019 <- 2019-LT.ID$yr.class #this is assuming everyone has survived, which is not true - add in mort data
+# hist(LT.ID$ageat2019)
 
 #
 #catch$yr.class <- NA
@@ -167,41 +170,27 @@ hist(LT.ID$ageat2019)
 #}
 
 #attribute hatchery cohort from LT.ID table
-catch$cohort <- NA
-for (i in 1:nrow(catch)){
-  catch$cohort[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"LTCohortYr"]
-}
+# catch$cohort <- NA
+# for (i in 1:nrow(catch)){
+#   catch$cohort[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"LTCohortYr"]
+# }
+# 
+# unique(LT.ID$LTCohortYr)
+
+
 
 
 ##bycatch
+unique(bycatch$ByCatchSpecies)
 
-str(bycatch)
 bycatchR <- bycatch %>% 
-  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, count = ByCatchCount,
+  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
+         count = ByCatchCount,
          datetime = ByCatchDate) %>% 
   mutate(yr = year(datetime), species = as.character(species))
+str(bycatchR)
 
 
-#bycatch$EffortAutoNumber <- bycatch$EffortAutoNumber_ByCatch
-#bycatch$LTFishID_Autonumber <- NA
-#bycatch$species <- bycatch$ByCatchSpecies
-#bycatch$count <- bycatch$ByCatchCount
-#bycatch$in.offshore <- bycatch$ByCatchShore
-#bycatch$comments <- bycatch$ByCatchComments
-
-# bycatch$FL <- NA
-# bycatch$WT<- NA
-# bycatch$condition <- NA
-# bycatch$yr.class <- NA
-# bycatch$cohort <- NA
-# bycatch$maturity<- NA
-# bycatch$fate<- NA
-# bycatch$stomach1<- NA
-# bycatch$stomach.comm1<- NA
-# bycatch$sex <- NA
-# 
-# bycatch$CaptureIDAutoNumber <- NA
-# catch$SummaryCaptureIDAutoNumber <- NA
 
 
 #merge catches:
@@ -228,15 +217,11 @@ str(catch.all)
 ### Merge efforts with catches ##
 
 effort.catch <- effortR %>% 
-  full_join(catch.all)
+  full_join(catch.all) %>% 
+  mutate(species = ifelse(is.na(species),"NFC", species)) # insert "NFC" where there is no corresponding catch for effort
 
-str(effort.catch)
+unique(effort.catch$species)
 
-# insert "NFC" where there is no corresponding catch for effort:
-
-effort.catch[which(is.na(effort.catch$catchID)),"species"] <- "NFC"
-
-which(is.na(effort.catch$species)) #should be "integer(0)"
 
 
 
@@ -245,9 +230,20 @@ which(is.na(effort.catch$species)) #should be "integer(0)"
 #how many fish were caught on shoals in 2019?
 str(catch.all)
 
-catch.all %>%
+catch.all.2019 <- catch.all %>% 
   filter(yr %in% 2019) %>% 
   filter(species %in% "LT")
+
+length(unique(catch.all.2019$LTFishIDAutonumber))
+
+#how many were male?
+
+catch.all.2019m <- catch.all %>% 
+  filter(yr %in% 2019) %>% 
+  filter(species %in% "LT") %>% 
+  filter(sex %in% "m")
+
+length(unique(catch.all.2019m$LTFishIDAutonumber))
 
 
 
