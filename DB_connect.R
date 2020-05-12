@@ -25,10 +25,8 @@ library(lubridate)
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
 
-#ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-#	DBQ=//Moberly Fish Database-copy11-May-2020.accdb")
 
-#sqlTables(ch,tableType = "TABLE")
+sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
 
 effort <- sqlFetch(ch, "TABLE - Effort Information")
 env <- sqlFetch(ch,"TABLE - Environmental Info")
@@ -42,8 +40,6 @@ odbcCloseAll()
 
 # ACTIONS TO DO: ####
 # - mark whether fish is recap or not in any given year to quickly summarize
-
-
 
 
 
@@ -125,9 +121,7 @@ anyDuplicated(effortR$EffortAutoNumber)
 #### CATCH and BYCATCH ####
 
 #get sex and age from LT.ID table and clean up catch table
-# sexR <- LT.ID %>% 
-#   mutate(sex = as.character(FishSex)) %>% 
-#   select(LTFishIDAutonumber, sex)
+
 yr.select <- 2019
 
 LT.IDR <- LT.ID %>% 
@@ -139,6 +133,9 @@ LT.IDR <- LT.ID %>%
 
 # freq of fish of diff ages in the selected year
 hist(LT.IDR$ageatyr.select)
+
+#attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
+################## RICKS MODS ################## to calculate age if it survived to 2019
 
 #add sex, whether hatchery, and yr.class to catch
 catchR <- catch %>% 
@@ -152,32 +149,39 @@ catchR <- catch %>%
 
 str(catchR)  
 
-#assign whether the fish was a recap at any given point of capture
+
+# Making recapture histories:
+
+str(catchR)
+str(effortR)
+unique(effortR$survey.type)
+
+
+catch.history <- effortR %>% 
+  select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
+  full_join(catchR) %>% 
+  filter(species %in% "LT") 
+
+str(catch.history)
+unique(catch.history$gear.type)
+unique(catch.history$survey.type)
+
+
+catch.hist.total <- catch.history %>%  
+  group_by(LTFishIDAutonumber) %>% 
+  summarise(total = sum(count))
+
+catch.hist.byyr <- catch.history %>%  
+  group_by(LTFishIDAutonumber, yr) %>% 
+  summarise(total = sum(count))
+
+catch.hist.byseasonyr <- catch.history %>%  
+  group_by(LTFishIDAutonumber, season, yr) %>% 
+  summarise(total = sum(count))
 
 
 
-
-#attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
-################## RICKS MODS ################## to calculate age if it survived to 2019
-#LT.ID$yr.class <- year(LT.ID$FishFinal_Age_Date)-LT.ID$FishFinal_Age
-# LT.ID$ageat2019 <- 2019-LT.ID$yr.class #this is assuming everyone has survived, which is not true - add in mort data
-# hist(LT.ID$ageat2019)
-
-#
-#catch$yr.class <- NA
-#for (i in 1:nrow(catch)){
-#  catch$yr.class[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"yr.class"]
-#}
-
-#attribute hatchery cohort from LT.ID table
-# catch$cohort <- NA
-# for (i in 1:nrow(catch)){
-#   catch$cohort[i] <- LT.ID[which(LT.ID$LTFishIDAutonumber==catch$LTFishID_Autonumber[i]),"LTCohortYr"]
-# }
-# 
-# unique(LT.ID$LTCohortYr)
-
-
+  
 
 
 ##bycatch
@@ -201,12 +205,12 @@ str(bycatchR)
 # bycatch.merge <- bycatch[,c("EffortAutoNumber","SummaryCaptureIDAutoNumber","LTFishID_Autonumber",
 #                             "species","count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
 #                             "stomach.comm1","comments","CaptureIDAutoNumber")]
-
 str(catchR)
 str(bycatchR)
+unique(bycatchR$count)
 
 catch.all <- catchR %>% 
-  full_join(bycatchR) #for some reason this seems to be eliminating some rows of bycatch. See effort 3516 to see what I mean
+  full_join(bycatchR, by=c("EffortAutoNumber","species","count", "yr")) #for some reason this seems to be eliminating some rows of bycatch. See effort 3516 to see what I mean
 str(catch.all)
 
 catch.all$catchID <- 1:nrow(catch.all)
