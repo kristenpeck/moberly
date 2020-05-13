@@ -7,3 +7,8 @@
 2016_Mark.R
 *.csv
 *.pdf
+*.rda
+*.inp
+*.out
+*.res
+*.vcv
