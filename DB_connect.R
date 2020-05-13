@@ -13,6 +13,7 @@
 library(RODBC)
 library(dplyr)
 library(lubridate)
+library(tidyr)
 
 #Open "channel" to database to extract data tables. Close connection when done #
 # Troubleshooting Issues:
@@ -150,41 +151,91 @@ catchR <- catch %>%
 str(catchR)  
 
 
-# Making recapture histories:
-
-str(catchR)
-str(effortR)
-unique(effortR$survey.type)
-
+##### recapture histories ####
 
 catch.history <- effortR %>% 
-  select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
+  dplyr::select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
   full_join(catchR) %>% 
-  filter(species %in% "LT") 
-
-str(catch.history)
-unique(catch.history$gear.type)
-unique(catch.history$survey.type)
-
-
-catch.hist.total <- catch.history %>%  
-  group_by(LTFishIDAutonumber) %>% 
-  summarise(total = sum(count))
-
-catch.hist.byyr <- catch.history %>%  
-  group_by(LTFishIDAutonumber, yr) %>% 
-  summarise(total = sum(count))
-
-catch.hist.byseasonyr <- catch.history %>%  
-  group_by(LTFishIDAutonumber, season, yr) %>% 
-  summarise(total = sum(count))
-
-
-
+  filter(species %in% "LT") %>% 
+  mutate(freq = case_when(fate %in% c("a",NA) ~ 1,
+                          fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
+  arrange(datetime)
   
+#QA to check if fish were mis-recorded as dead and then found alive
+qa.freq <- catch.history %>% 
+  group_by(LTFishIDAutonumber) %>% 
+  summarize(qa.freq = paste(freq, collapse = ""), qa.sex = paste(sex,collapse = ""))
+unique(qa.freq$qa.freq) #none of these should havea death in the middle of the series
+unique(qa.freq$qa.sex) #none of these should switch sex in the middle of the series
+
+# qa.freq[which(qa.freq$qa.freq %in% c("-11", "11-11111")),]
+# catch.history %>% 
+#   filter(LTFishIDAutonumber %in% c(143, 219 , 12274)) %>% 
+#   arrange(LTFishIDAutonumber, datetime)
+# 
+#fixed 143 (suspected death from poor release in 2013)
+#fixed 219, where the date of lethal sample was mis-recorded
+#fixed 12274 (581) -> this fish (caught Aug 22, 2017) should have been fish #341. Changed
+
+#catches per year, all seasons, all types:
+(catch.hist.byyr <- catch.history %>%  
+  group_by(LTFishIDAutonumber, yr) %>% 
+  summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+  arrange(LTFishIDAutonumber))
+str(catch.hist.total)
+
+#catches by year and season, all types:
+(catch.hist.byseasonyr <- catch.history %>%  
+  filter(season %in% c("spring", "summer", "fall")) %>% 
+  mutate(season.num = case_when(season %in% "spring" ~ "1spring",
+                                season %in% "summer" ~ "2summer",
+                                season %in% "fall" ~ "3fall")) %>% 
+  mutate(season.yr = factor(paste0(yr,"-",season.num), ordered=T)) %>% 
+  group_by(LTFishIDAutonumber, season.yr) %>% 
+  summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+  mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
+  arrange(LTFishIDAutonumber)) 
 
 
-##bycatch
+#all seasons, all recap types:
+(catch.hist.wide <- spread(data=catch.hist.byseasonyr, key=season.yr, value = tot.catches,
+                           fill=0))
+
+cols <- names(catch.hist.wide)[4:ncol(catch.hist.wide)]
+catch.hist.wide$ch <- do.call(paste, c(catch.hist.wide[cols],sep=""))
+headtail(catch.hist.wide)
+
+
+
+#catches on spawning shoals only (excluding holding pen):
+catch.hist.spawner <- catch.history %>%  
+    filter(survey.type %in% "Spawner Sampling/Tagging", 
+           gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
+                            "Seine Net", "Angling")) %>% 
+    group_by(LTFishIDAutonumber, yr) %>% 
+    summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+    mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
+    arrange(LTFishIDAutonumber, yr) 
+catch.hist.spawner
+
+ch.spawner <- catch.hist.spawner %>% 
+  spread(key=yr, value = tot.catches,fill=0) 
+
+cols <- names(ch.spawner)[4:ncol(ch.spawner)]
+ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
+headtail(ch.spawner)
+
+str(ch.spawner)
+
+#see if any fish in the dataset have no captures
+no.catch <- paste(rep(0,length(4:ncol(ch.spawner))-1),collapse ="")
+which(ch.spawner$ch == no.catch)
+
+
+
+
+
+#### bycatch ####
 unique(bycatch$ByCatchSpecies)
 
 bycatchR <- bycatch %>% 
