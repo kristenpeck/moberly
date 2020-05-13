@@ -30,6 +30,10 @@ catch.history <- effortR %>%
                           fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
   arrange(datetime)
 
+# write.csv(catch.history, "catch.history.csv")
+# catch.history <- read.csv("catch.history.csv", row.names = NULL)
+# headtail(catch.history)
+
 #QA to check if fish were mis-recorded as dead and then found alive
 qa.freq <- catch.history %>% 
   group_by(LTFishIDAutonumber) %>% 
@@ -37,16 +41,14 @@ qa.freq <- catch.history %>%
 unique(qa.freq$qa.freq) #none of these should have a death in the middle of the series
 unique(qa.freq$qa.sex) #none of these should switch sex in the middle of the series
 
-# qa.freq[which(qa.freq$qa.freq %in% c("-11", "11-11111")),]
-# catch.history %>% 
-#   filter(LTFishIDAutonumber %in% c(143, 219 , 12274)) %>% 
-#   arrange(LTFishIDAutonumber, datetime)
+#some fixes caught by this QA:
 # 
-#fixed 143 (was a suspected death from poor release in 2013, but recaptured)
+#fixed 143 (was a suspected death from poor release in 2013, but later recaptured)
 #fixed 219, where the date of lethal sample was mis-recorded
-#fixed 12274 (581) -> this fish (caught Aug 22, 2017) should have been fish #341. Changed
+#fixed 12274 (581) -> this fish (caught Aug 22, 2017) should have been fish #341.
 
-#catches per year, all seasons, all types:
+
+#catch history per year, all seasons, all types:
 (catch.hist.byyr <- catch.history %>%  
     group_by(LTFishIDAutonumber, yr) %>% 
     summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
@@ -93,11 +95,10 @@ ch.spawner <- catch.hist.spawner %>%
 cols <- names(ch.spawner)[4:ncol(ch.spawner)]
 ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
 headtail(ch.spawner)
-length(cols)
+length(cols) #this is the number of events
 
-#see if any fish in the dataset have no captures
-no.catch <- paste(rep(0,length(4:ncol(ch.spawner))-1),collapse ="")
-which(ch.spawner$ch == no.catch)
+#see if any fish in the dataset have no captures since these will not work in MR analysis
+which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
 
 
 # ### older script: ####
