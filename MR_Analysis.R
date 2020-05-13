@@ -93,7 +93,7 @@ ch.spawner <- catch.hist.spawner %>%
 cols <- names(ch.spawner)[4:ncol(ch.spawner)]
 ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
 headtail(ch.spawner)
-
+length(cols)
 
 #see if any fish in the dataset have no captures
 no.catch <- paste(rep(0,length(4:ncol(ch.spawner))-1),collapse ="")
@@ -198,11 +198,7 @@ which(ch.spawner$ch == no.catch)
 #*** Make sure that you have Mark downloaded onto your computer from here: 
 # http://www.phidot.org/software/mark/.  
 
-## RE:
-#The data should be all set up and you should be able to mess around with the variables. 
-#These are BA's notes, CS refers to Carl Schwarts who is a stats guy he was talking to. 
-# Read the package manual and that coil-bound guide that I left in the cabinet. Good luck!!!  
-######################################
+## The following lines are based on B. Anderson's scripts and have not recently been updated.
 
 #establish the process.data for analysis
 ####time intervals are fractions of a year between capture events, and includes the length of time elapsed since the last capture event -- must be updated to current time
@@ -210,12 +206,22 @@ which(ch.spawner$ch == no.catch)
 ####begin.time is set to 2008 to indicate the fall period of that year
 #and create the default design data - ddl
 
+#select only male spawners
 ch.spawnerm <- ch.spawner %>% 
   filter(sex %in% "m")
 headtail(ch.spawnerm)
 
+spawner.model <- mark(ch.spawner, model="POPAN", begin.time = 2008) 
+
+
+
+
+
+## Brendan - this is where I stopped... KP
+
+
 moberly.proc = process.data(ch.spawnerm, model= "POPAN", begin.time=2008, nocc=10, 
-                            time.intervals=c(1,1,1,1,1,1,1,1,1,1))
+                            time.intervals=c(1,1,1,1,1,1,1,1,1,1,1,1,1,1))
 (moberly.ddl=make.design.data(moberly.proc))
 
 
