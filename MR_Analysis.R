@@ -1,9 +1,8 @@
-#clear the workspace
-#rm(list=ls())
 
-#setwds
-outputs2018 <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
-Db.connect <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
+
+# This script is meant to analyze the mark-recapture data from Moberly Lake.
+# Analysis originally written by B. Anderson
+# Set-up and analysis modifications by K. Peck and R. Elsner
 
 library(data.table)
 library(FSA)
@@ -11,118 +10,198 @@ library(RMark)
 library(RODBC)
 
 
-########################################
+###
 #### Run Moberly LT Database script ####
-########################################
+###
 
-setwd(Db.connect) # from above
-getwd()
-# make sure Mob_Db_connect.R below is saved before proceeding.
-source("Mob_Db_connect.R")
+
+# make sure Db_connect.R below is saved before proceeding.
+source("Db_connect.R")
 ls()
 
-######################################
-######## Mark-Recapture ##############
-######################################
 
-effort.catch$season.yr <- ifelse(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling",
-	paste0(substr(effort.catch$season,1,8),effort.catch$yr),NA)
+##### Construct Capture Histories ####
 
-events.df <-unique(effort.catch[which(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling"),
-	c("yr","season","survey.type")])
-events.df <- events.df[order(events.df$yr),]
+catch.history <- effortR %>% 
+  dplyr::select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
+  full_join(catchR) %>% 
+  filter(species %in% "LT") %>% 
+  mutate(freq = case_when(fate %in% c("a",NA) ~ 1,
+                          fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
+  arrange(datetime)
 
-events.df$season.yr <- paste0(substr(events.df$season,1,8),events.df$yr)
+#QA to check if fish were mis-recorded as dead and then found alive
+qa.freq <- catch.history %>% 
+  group_by(LTFishIDAutonumber) %>% 
+  summarize(qa.freq = paste(freq, collapse = ""), qa.sex = paste(sex,collapse = ""))
+unique(qa.freq$qa.freq) #none of these should have a death in the middle of the series
+unique(qa.freq$qa.sex) #none of these should switch sex in the middle of the series
 
-#events <- events.df$season.yr # all years since 2005
-(events <- events.df$season.yr[c(0,4:14)]) # all years since 2008
+# qa.freq[which(qa.freq$qa.freq %in% c("-11", "11-11111")),]
+# catch.history %>% 
+#   filter(LTFishIDAutonumber %in% c(143, 219 , 12274)) %>% 
+#   arrange(LTFishIDAutonumber, datetime)
+# 
+#fixed 143 (was a suspected death from poor release in 2013, but recaptured)
+#fixed 219, where the date of lethal sample was mis-recorded
+#fixed 12274 (581) -> this fish (caught Aug 22, 2017) should have been fish #341. Changed
 
-str(effort.catch)
-LT.catch <- effort.catch[which(effort.catch$species=="LT"),]
-
-#take out any LT that were lost from the nets (and therefore have no ID)
-#### LT.catch <- LT.catch[which(!is.na(LT.catch$LTFishID_Autonumber)),]
-
-
-#Query: for interest, generate a table with how many recaps per individual and the max recaps
-recaps <- data.frame(table(LT.catch$LTFishIDAutonumber));colnames(recaps) <- c("LT auto ID","times recapped")
-(recaps[which(recaps[,2]==max(recaps[,2])),])
-(props <- xtabs(~recaps$`times recapped`))
- 
-#par(mfrow=c(1,1), bty="n")
-#hist(recaps[,2])
-#str(LT.catch)
-
-#### Capture Histories ####
-#make capture histories for all fish, but only the events for fall will be identified
-caphist <- data.frame(MSAccess_Fish_ID=LT.catch$LTFishIDAutonumber)
-caphist$sex <- LT.catch$sex
-$yr.class <- LT.catch$yr.class
-$event <- LT.catch$season.yr
-ch$freq <- as.character(LT.catch$fate)
-ch <- ch %>%  mutate(freq = as.numeric(ifelse(freq=="m",-1, # assumes morts -1
-                      ifelse(!freq=="m?"|freq=="a",1,NA)))) %>% # if unsure of mort then assumed alive
-  arrange(MSAccess_Fish_ID,freq) # arrange by fishID and so that mort shows up first where fish are captured multiple times
-ch$freq <- ifelse(is.na(ch$freq),"1",ch$freq)
-
-# below ensures that all mort fish are coded as -1 and all living fish are +1
-for (i in 2:nrow(ch)){
-  ch$freq[i] <- ifelse(ch$MSAccess_Fish_ID[i]==ch$MSAccess_Fish_ID[i-1],ch$freq[i-1],
-                         ifelse(ch$MSAccess_Fish_ID[i]!=ch$MSAccess_Fish_ID[i-1],ch$freq[i],0))
-}
-ch$freq <- as.numeric(ch$freq)
-
-#add events
-for (i in 1:length(events)){
-	ch[,events[i]] <- 0
-	}
-for (i in 1:length(events)){
-	ch[,events[i]] <- ifelse(ch$event==events[i],1,0)
-	}
-ch <- ch[order(ch$MSAccess_Fish_ID),]
-
-#only keep MALES caught during FALL spawner events
-ch <- ch[which(!is.na(ch$event)&ch$sex=="m"),]
-
-ch.sum <- data.frame(MSAccess_Fish_ID = unique(ch$MSAccess_Fish_ID))
-for (i in 1:length(events)){
-	ch.sum[,events[i]] <- 0
-	}
-
-for (i in 1:length(events)){
-	ch.sum[,events[i]] <- tapply(ch[,events[i]],ch$MSAccess_Fish_ID,FUN=sum)
-	}
-
-ch.sum$freq <- tapply(ch$freq,ch$MSAccess_Fish_ID, FUN=prod)
-
-## export to a capture histories file (if you want)
-#setwd(outputs2017)
-#write.csv(ch.sum, "capture_histories.csv", row.names=F)
-
-#for fish that were captured more than once in the capture event, just give them a "1"
-for (i in 1:length(events)){
-ch.sum[which(ch.sum[,(events[i])] > 1),events[i]] <- 1
-}
-
-ch.sum$ch <- apply(ch.sum[,2:12],1,paste0, collapse="") # CHANGES MADE HERE
-
-# calc recap percentage vs fish never recapped
-
-recapped <- ch.sum[which(ch.sum$ch!="00000000000"),] # CHANGES MADE HERE
-nonrecapped <- ch.sum[which(ch.sum$ch=="00000000000"),] # CHANGES MADE HERE
-
-##remove males with no fall captures
-ch.sum <- ch.sum[which(ch.sum$ch!="00000000000"),] # CHANGES MADE HERE
-head(ch.sum)
+#catches per year, all seasons, all types:
+(catch.hist.byyr <- catch.history %>%  
+    group_by(LTFishIDAutonumber, yr) %>% 
+    summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+    arrange(LTFishIDAutonumber))
 
 
-######################################
+#df of catches by year and season, all types:
+(catch.hist.byseasonyr <- catch.history %>%  
+    filter(season %in% c("spring", "summer", "fall")) %>% 
+    mutate(season.num = case_when(season %in% "spring" ~ "1spring",
+                                  season %in% "summer" ~ "2summer",
+                                  season %in% "fall" ~ "3fall")) %>% 
+    mutate(season.yr = factor(paste0(yr,"-",season.num), ordered=T)) %>% 
+    group_by(LTFishIDAutonumber, season.yr) %>% 
+    summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+    mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
+    arrange(LTFishIDAutonumber)) 
+
+
+  #capture histories from all seasons, all recap types:
+(ch.allsampling <- spread(data=catch.hist.byseasonyr, key=season.yr, value = tot.catches,
+                          fill=0))
+
+cols <- names(ch.allsampling)[4:ncol(ch.allsampling)]
+ch.allsampling$ch <- do.call(paste, c(ch.allsampling[cols],sep=""))
+headtail(ch.allsampling)
+
+
+
+#df and capture histories on spawning shoals only (excluding holding pen):
+catch.hist.spawner <- catch.history %>%  
+  filter(survey.type %in% "Spawner Sampling/Tagging", 
+         gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
+                          "Seine Net", "Angling")) %>% 
+  group_by(LTFishIDAutonumber, yr) %>% 
+  summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+  mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
+  arrange(LTFishIDAutonumber, yr) 
+catch.hist.spawner
+
+ch.spawner <- catch.hist.spawner %>% 
+  spread(key=yr, value = tot.catches,fill=0) 
+
+cols <- names(ch.spawner)[4:ncol(ch.spawner)]
+ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
+headtail(ch.spawner)
+
+
+#see if any fish in the dataset have no captures
+no.catch <- paste(rep(0,length(4:ncol(ch.spawner))-1),collapse ="")
+which(ch.spawner$ch == no.catch)
+
+
+# ### older script: ####
+# effort.catch$season.yr <- ifelse(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling",
+# 	paste0(substr(effort.catch$season,1,8),effort.catch$yr),NA)
+# 
+# events.df <-unique(effort.catch[which(effort.catch$survey.type=="Spawner Sampling/Tagging"|effort.catch$survey.type=="Spawner Sampling"),
+# 	c("yr","season","survey.type")])
+# events.df <- events.df[order(events.df$yr),]
+# 
+# # events.df$season.yr <- paste0(substr(events.df$season,1,8),events.df$yr)
+# # 
+# # #events <- events.df$season.yr # all years since 2005
+# # (events <- events.df$season.yr[c(0,4:14)]) # all years since 2008
+# # 
+# # str(effort.catch)
+# # catchR <- effort.catch[which(effort.catch$species=="LT"),]
+# # 
+# # #take out any LT that were lost from the nets (and therefore have no ID)
+# # #### catchR <- catchR[which(!is.na(catchR$LTFishID_Autonumber)),]
+# 
+# 
+# #Query: for interest, generate a table with how many recaps per individual and the max recaps
+# recaps <- data.frame(table(catchR$LTFishIDAutonumber));colnames(recaps) <- c("LT auto ID","times recapped")
+# (recaps[which(recaps[,2]==max(recaps[,2])),])
+# (props <- xtabs(~recaps$`times recapped`))
+#  
+# 
+# #### Capture Histories #
+# #make capture histories for all fish, but only the events for fall will be identified
+# caphist <- data.frame(MSAccess_Fish_ID=catchR$LTFishIDAutonumber)
+# caphist$sex <- catchR$sex
+# caphist$yr.class <- catchR$yr.class
+# caphist$event <- catchR$season.yr
+# 
+# ch$freq <- as.character(catchR$fate)
+# ch <- ch %>%  mutate(freq = as.numeric(ifelse(freq=="m",-1, # assumes morts -1
+#                       ifelse(!freq=="m?"|freq=="a",1,NA)))) %>% # if unsure of mort then assumed alive
+#   arrange(MSAccess_Fish_ID,freq) # arrange by fishID and so that mort shows up first where fish are captured multiple times
+# ch$freq <- ifelse(is.na(ch$freq),"1",ch$freq)
+# 
+# # below ensures that all mort fish are coded as -1 and all living fish are +1
+# for (i in 2:nrow(ch)){
+#   ch$freq[i] <- ifelse(ch$MSAccess_Fish_ID[i]==ch$MSAccess_Fish_ID[i-1],ch$freq[i-1],
+#                          ifelse(ch$MSAccess_Fish_ID[i]!=ch$MSAccess_Fish_ID[i-1],ch$freq[i],0))
+# }
+# ch$freq <- as.numeric(ch$freq)
+# 
+# #add events
+# for (i in 1:length(events)){
+# 	ch[,events[i]] <- 0
+# 	}
+# for (i in 1:length(events)){
+# 	ch[,events[i]] <- ifelse(ch$event==events[i],1,0)
+# 	}
+# ch <- ch[order(ch$MSAccess_Fish_ID),]
+# 
+# #only keep MALES caught during FALL spawner events
+# ch <- ch[which(!is.na(ch$event)&ch$sex=="m"),]
+# 
+# ch.sum <- data.frame(MSAccess_Fish_ID = unique(ch$MSAccess_Fish_ID))
+# for (i in 1:length(events)){
+# 	ch.sum[,events[i]] <- 0
+# 	}
+# 
+# for (i in 1:length(events)){
+# 	ch.sum[,events[i]] <- tapply(ch[,events[i]],ch$MSAccess_Fish_ID,FUN=sum)
+# 	}
+# 
+# ch.sum$freq <- tapply(ch$freq,ch$MSAccess_Fish_ID, FUN=prod)
+# 
+# ## export to a capture histories file (if you want)
+# #setwd(outputs2017)
+# #write.csv(ch.sum, "capture_histories.csv", row.names=F)
+# 
+# #for fish that were captured more than once in the capture event, just give them a "1"
+# for (i in 1:length(events)){
+# ch.sum[which(ch.sum[,(events[i])] > 1),events[i]] <- 1
+# }
+# 
+# ch.sum$ch <- apply(ch.sum[,2:12],1,paste0, collapse="") # CHANGES MADE HERE
+# 
+# # calc recap percentage vs fish never recapped
+# 
+# recapped <- ch.sum[which(ch.sum$ch!="00000000000"),] # CHANGES MADE HERE
+# nonrecapped <- ch.sum[which(ch.sum$ch=="00000000000"),] # CHANGES MADE HERE
+# 
+# ##remove males with no fall captures
+# ch.sum <- ch.sum[which(ch.sum$ch!="00000000000"),] # CHANGES MADE HERE
+# head(ch.sum)
+# # 
+# 
+
+
+
+####
 ##### Mark-recap Analysis - POPAN #### 
-#*** You need to download 
-## Mark I think and just have it on your computer, I had forgotten that but the models don't work without it.
-## The data should be all set up and you should be able to mess around with the variables. These are 
-## BA's notes, CS refers to Carl Schwarts who is a stats guy he was talking to. Read the package manual and that
-## coil-bound guide that I left in teh cabinet. Good luck!!!  
+#*** Make sure that you have Mark downloaded onto your computer from here: 
+# http://www.phidot.org/software/mark/.  
+
+## RE:
+#The data should be all set up and you should be able to mess around with the variables. 
+#These are BA's notes, CS refers to Carl Schwarts who is a stats guy he was talking to. 
+# Read the package manual and that coil-bound guide that I left in the cabinet. Good luck!!!  
 ######################################
 
 #establish the process.data for analysis
@@ -131,7 +210,12 @@ head(ch.sum)
 ####begin.time is set to 2008 to indicate the fall period of that year
 #and create the default design data - ddl
 
-moberly.proc = process.data(ch.sum, model= "POPAN", begin.time=2008, nocc=10, time.intervals=c(1,1,1,1,1,1,1,1,1,1))
+ch.spawnerm <- ch.spawner %>% 
+  filter(sex %in% "m")
+headtail(ch.spawnerm)
+
+moberly.proc = process.data(ch.spawnerm, model= "POPAN", begin.time=2008, nocc=10, 
+                            time.intervals=c(1,1,1,1,1,1,1,1,1,1))
 (moberly.ddl=make.design.data(moberly.proc))
 
 

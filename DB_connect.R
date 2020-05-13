@@ -58,7 +58,7 @@ effortR <- effort %>%
                                    month %in% c(10,11) ~ "fall"), ordered=T, 
                          levels = c("winter","spring","summer","fall"))) %>% 
   mutate(soaktime = round(difftime(EffortEndDateTime, EffortStartDateTime, units = "hours"),2)) %>% 
-  select(EffortAutoNumber,field.ID, st.datetime=EffortStartDateTime, 
+  dplyr::select(EffortAutoNumber,field.ID, st.datetime=EffortStartDateTime, 
          end.datetime=EffortEndDateTime, yr, month, 
          season, soaktime, shoal=EffortSpawningShoal, UTMZ=EffortSiteID_UTMZone_End, 
          UTME=EffortSiteID_Easting_End, UTMN=EffortSiteID_Northing_End, 
@@ -102,7 +102,7 @@ effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
 
 #tidy up ENV data 
 envR <- env %>% 
-  select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, temp=ENV_H2OTemp,
+  dplyr::select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, temp=ENV_H2OTemp,
          wind.dir = ENV_WindDirection, wind.spd = ENV_WindSpeed)
 envR
 ### Temp join Env measures with Effort
@@ -130,7 +130,7 @@ LT.IDR <- LT.ID %>%
   mutate(yr.class = year(FishFinal_Age_Date)-FishFinal_Age) %>% 
   mutate(ageatyr.select = yr.select-yr.class) %>% 
   mutate(hatchery = ifelse(!is.na(LTCohortYr), "yes","no")) %>% 
-  select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
+  dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
 
 # freq of fish of diff ages in the selected year
 hist(LT.IDR$ageatyr.select)
@@ -140,7 +140,7 @@ hist(LT.IDR$ageatyr.select)
 
 #add sex, whether hatchery, and yr.class to catch
 catchR <- catch %>% 
-  select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
+  dplyr::select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
          FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, 
          fate=CaptureFate, datetime = CaptureDate) %>% 
   mutate(condition=(100000*WT)/(FL^3), yr=year(datetime), 
@@ -151,95 +151,12 @@ catchR <- catch %>%
 str(catchR)  
 
 
-##### recapture histories ####
-
-catch.history <- effortR %>% 
-  dplyr::select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
-  full_join(catchR) %>% 
-  filter(species %in% "LT") %>% 
-  mutate(freq = case_when(fate %in% c("a",NA) ~ 1,
-                          fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
-  arrange(datetime)
-  
-#QA to check if fish were mis-recorded as dead and then found alive
-qa.freq <- catch.history %>% 
-  group_by(LTFishIDAutonumber) %>% 
-  summarize(qa.freq = paste(freq, collapse = ""), qa.sex = paste(sex,collapse = ""))
-unique(qa.freq$qa.freq) #none of these should havea death in the middle of the series
-unique(qa.freq$qa.sex) #none of these should switch sex in the middle of the series
-
-# qa.freq[which(qa.freq$qa.freq %in% c("-11", "11-11111")),]
-# catch.history %>% 
-#   filter(LTFishIDAutonumber %in% c(143, 219 , 12274)) %>% 
-#   arrange(LTFishIDAutonumber, datetime)
-# 
-#fixed 143 (suspected death from poor release in 2013)
-#fixed 219, where the date of lethal sample was mis-recorded
-#fixed 12274 (581) -> this fish (caught Aug 22, 2017) should have been fish #341. Changed
-
-#catches per year, all seasons, all types:
-(catch.hist.byyr <- catch.history %>%  
-  group_by(LTFishIDAutonumber, yr) %>% 
-  summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
-  arrange(LTFishIDAutonumber))
-str(catch.hist.total)
-
-#catches by year and season, all types:
-(catch.hist.byseasonyr <- catch.history %>%  
-  filter(season %in% c("spring", "summer", "fall")) %>% 
-  mutate(season.num = case_when(season %in% "spring" ~ "1spring",
-                                season %in% "summer" ~ "2summer",
-                                season %in% "fall" ~ "3fall")) %>% 
-  mutate(season.yr = factor(paste0(yr,"-",season.num), ordered=T)) %>% 
-  group_by(LTFishIDAutonumber, season.yr) %>% 
-  summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
-  mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
-  arrange(LTFishIDAutonumber)) 
-
-
-#all seasons, all recap types:
-(catch.hist.wide <- spread(data=catch.hist.byseasonyr, key=season.yr, value = tot.catches,
-                           fill=0))
-
-cols <- names(catch.hist.wide)[4:ncol(catch.hist.wide)]
-catch.hist.wide$ch <- do.call(paste, c(catch.hist.wide[cols],sep=""))
-headtail(catch.hist.wide)
-
-
-
-#catches on spawning shoals only (excluding holding pen):
-catch.hist.spawner <- catch.history %>%  
-    filter(survey.type %in% "Spawner Sampling/Tagging", 
-           gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
-                            "Seine Net", "Angling")) %>% 
-    group_by(LTFishIDAutonumber, yr) %>% 
-    summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
-    mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
-    arrange(LTFishIDAutonumber, yr) 
-catch.hist.spawner
-
-ch.spawner <- catch.hist.spawner %>% 
-  spread(key=yr, value = tot.catches,fill=0) 
-
-cols <- names(ch.spawner)[4:ncol(ch.spawner)]
-ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
-headtail(ch.spawner)
-
-str(ch.spawner)
-
-#see if any fish in the dataset have no captures
-no.catch <- paste(rep(0,length(4:ncol(ch.spawner))-1),collapse ="")
-which(ch.spawner$ch == no.catch)
-
-
-
-
 
 #### bycatch ####
 unique(bycatch$ByCatchSpecies)
 
 bycatchR <- bycatch %>% 
-  select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
+  dplyr::select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
          count = ByCatchCount,
          datetime = ByCatchDate) %>% 
   mutate(yr = year(datetime), species = as.character(species))
@@ -499,7 +416,8 @@ length(unique(catch.all.2019m$LTFishIDAutonumber))
 # 
 # 
 ls()
- rm("ch","bycatch","catch","env","effort","i", "sexR")
+ rm("ch","bycatch","catch","env","effort","catch.all.2019","catch.all.2019m",
+    "yr.select", "LT.ID")
 # ls()
 # 
 # 
