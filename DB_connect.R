@@ -23,6 +23,8 @@ library(tidyr)
 # Read thru this site and see if it helps: https://docs.microsoft.com/en-us/office/troubleshoot/access/cannot-use-odbc-or-oledb
 # I installed a 64-bit driver and it solved my connection issues
 
+#NOTE: you need to be connected to the network files (VPN) and have access to the FSJ network files
+
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
 
@@ -71,7 +73,7 @@ str(effortR)
 
 
 
-#### Effort QA####
+#### Effort QA ####
 
 #which gillnetting efforts have a soaktime of 0? 
 effortR %>% 
@@ -80,7 +82,9 @@ effortR %>%
                           "RIC7 SGN - 7 Panel Sinking Gillnet","SLIN - Spring Littoral Index Netting Gillnet"))
 #which efforts do not have their locations defined? Probably lots at the moment, should go back and correct these
 effortR %>%
-  filter(UTME == 111111)
+  filter(UTME == 111111) %>% 
+  select(EffortAutoNumber, field.ID,end.datetime, UTME, UTMN, survey.type) %>% 
+  arrange(desc(end.datetime))
 
 #visual check to see that months were correctly classified into seasons
 arrange(unique(effortR[,c("month","season")]), by = month)
@@ -88,10 +92,10 @@ arrange(unique(effortR[,c("month","season")]), by = month)
 #any rows not fall into a season?
 which(is.na(effortR$season))
 
-#These Effort IDs have a duplicate time/date that is not shown here. 
+#These Effort IDs have a duplicate time/date in the db (only one of duplicates shown). 
 # Go look in the database for the duplicates and assess. Some of these
 # may be a result of two crews working at the same time in spring, 
-# so they are fine.
+# so those are fine, but this should catch double-entered efforts.
 effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
 
 
@@ -110,6 +114,8 @@ envR
 effortR <- effortR %>% 
   left_join(envR, by="EffortAutoNumber")
 
+
+
 # ***note: in cases where there are multiple env measures per effort, 
 # this merge will create duplicate effort IDs. Which will mess up 
 # other matches. Currently don't have any, but need to check if there are any
@@ -121,9 +127,9 @@ anyDuplicated(effortR$EffortAutoNumber)
 
 #### CATCH and BYCATCH ####
 
-#get sex and age from LT.ID table and clean up catch table
+#get sex and age from LT.ID table to add to general catch table and clean up catch table
 
-yr.select <- 2019
+yr.select <- 2020
 
 LT.IDR <- LT.ID %>% 
   mutate(sex = as.character(FishSex)) %>%
@@ -136,7 +142,7 @@ LT.IDR <- LT.ID %>%
 hist(LT.IDR$ageatyr.select)
 
 #attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
-################## RICKS MODS ################## to calculate age if it survived to 2019
+################## RICKS MODS ################## to calculate age if it survived to 2020
 
 #add sex, whether hatchery, and yr.class to catch
 catchR <- catch %>% 
