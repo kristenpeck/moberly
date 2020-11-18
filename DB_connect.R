@@ -106,21 +106,39 @@ effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
 
 #tidy up ENV data 
 envR <- env %>% 
-  dplyr::select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, temp=ENV_H2OTemp,
-         wind.dir = ENV_WindDirection, wind.spd = ENV_WindSpeed)
-envR
-### Temp join Env measures with Effort
+  dplyr::select(EffortAutoNumber=Effort_AutoNumber, method = ENVSamplingTool, secchi=ENV_SecchiDepth, 
+        temp=ENV_H2OTemp, wind.dir = ENV_WindDirection, wind.spd = ENV_WindSpeed)
+str(envR)
+### Join Env measures with Effort
 
 effortR <- effortR %>% 
   left_join(envR, by="EffortAutoNumber")
 
-
-
 # ***note: in cases where there are multiple env measures per effort, 
-# this merge will create duplicate effort IDs. Which will mess up 
-# other matches. Currently don't have any, but need to check if there are any
-anyDuplicated(effortR$EffortAutoNumber)
+# this merge will only take one of those env measures. 
+#To double-check whether any effort has >1 env measure, 
+#change the above to a full_join and run:
 
+#anyDuplicated(effortR$EffortAutoNumber)
+
+#Note also that any env measures NOT associated with an effort will be excluded, 
+# because these are not currently allowed in the DB
+
+# Secchi measurements:
+
+effortR %>% 
+  select(yr, month, secchi) %>% 
+  filter(!is.na(secchi)) %>% 
+  arrange(yr, month)
+
+#Ave. surface temps during spawner survey:
+
+effortR %>% 
+  select(yr, month, survey.type, temp) %>% 
+  filter(survey.type %in% "Spawner Sampling/Tagging") %>% 
+  filter(!is.na(temp)) %>% 
+  group_by(yr) %>% 
+  summarize(ave.temp = mean(temp), sd.temp= sd(temp, na.rm=T))
 
 
 
@@ -128,6 +146,7 @@ anyDuplicated(effortR$EffortAutoNumber)
 #### CATCH and BYCATCH ####
 
 #get sex and age from LT.ID table to add to general catch table and clean up catch table
+# need to select the year of interest (e.g. most recent sampling year) to calculate ages to that date
 
 yr.select <- 2020
 
@@ -135,20 +154,23 @@ LT.IDR <- LT.ID %>%
   mutate(sex = as.character(FishSex)) %>%
   mutate(yr.class = year(FishFinal_Age_Date)-FishFinal_Age) %>% 
   mutate(ageatyr.select = yr.select-yr.class) %>% 
-  mutate(hatchery = ifelse(!is.na(LTCohortYr), "yes","no")) %>% 
-  dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
+  mutate(hatchery = ifelse(LTRecapIdentifier=="Hatchery Cohort", "yes","no")) %>% 
+  dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery, LTRecapIdentifier)
 
-# freq of fish of diff ages in the selected year
+
+# theoretical freq of fish of diff ages in the selected year (not all would be alive still)
 hist(LT.IDR$ageatyr.select)
 
-#attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year
-################## RICKS MODS ################## to calculate age if it survived to 2020
+#attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year old,
+#since some age samples were collected in spring, some in summer, some in fall...
+# and all are likely somewhat inaccurate
+
 
 #add sex, whether hatchery, and yr.class to catch
 catchR <- catch %>% 
-  dplyr::select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, species=CaptureSpecies, 
-         FL=`CaptureFork Length`,WT=CaptureWeight, maturity=CaptureMaturity, 
-         fate=CaptureFate, datetime = CaptureDate) %>% 
+  dplyr::select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, 
+                species=CaptureSpecies, FL=`CaptureFork Length`,WT=CaptureWeight, 
+                maturity=CaptureMaturity, fate=CaptureFate, datetime = CaptureDate) %>% 
   mutate(condition=(100000*WT)/(FL^3), yr=year(datetime), 
          species = as.character(species)) %>% 
   mutate(count = ifelse(species %in% "NFC",0,1)) %>% 
@@ -163,31 +185,24 @@ unique(bycatch$ByCatchSpecies)
 
 bycatchR <- bycatch %>% 
   dplyr::select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
-         count = ByCatchCount,
-         datetime = ByCatchDate) %>% 
+         count = ByCatchCount,datetime = ByCatchDate) %>% 
   mutate(yr = year(datetime), species = as.character(species))
 str(bycatchR)
 
+#add catchR colnames to bycatchr for rbind (probably a better way of doing this...)
 
 
+list.names <- setdiff(names(catchR),names(bycatchR))
+temp.df <- data.frame(matrix(nrow = nrow(bycatchR),ncol=length(list.names)))
+colnames(temp.df) <- list.names
 
-#merge catches:
+bycatchRmerge <- cbind(bycatchR, temp.df)
 
-#catch.merge <- catch[,c("EffortAutoNumber","CaptureIDAutoNumber","LTFishID_Autonumber","species",
-#                         "count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
-#                         "stomach.comm1","comments","SummaryCaptureIDAutoNumber")]
-# bycatch.merge <- bycatch[,c("EffortAutoNumber","SummaryCaptureIDAutoNumber","LTFishID_Autonumber",
-#                             "species","count","FL","WT","condition","yr.class","cohort","sex","in.offshore","maturity","fate","stomach1",
-#                             "stomach.comm1","comments","CaptureIDAutoNumber")]
-str(catchR)
-str(bycatchR)
-unique(bycatchR$count)
+#merge with catchR
 
-catch.all <- catchR %>% 
-  full_join(bycatchR, by=c("EffortAutoNumber","species","count", "yr")) #for some reason this seems to be eliminating some rows of bycatch. See effort 3516 to see what I mean
-str(catch.all)
+catch.all <- rbind(catchR, bycatchRmerge)
 
-catch.all$catchID <- 1:nrow(catch.all)
+catch.all$catchID <- 1:nrow(catch.all) #**** what was this for??
 
 str(catch.all)
 
@@ -202,17 +217,23 @@ unique(effort.catch$species)
 
 
 
+#do all catch dates match the effort dates? seems like they do, since no extra column is made for catch datatime
+
 
 ### Small Queries ####
 
-#how many fish were caught on shoals in 2019?
+#how many individual fish were caught on shoals in a given year?
 str(catch.all)
 
-catch.all.2019 <- catch.all %>% 
-  filter(yr %in% 2019) %>% 
-  filter(species %in% "LT")
+yr.select <- 2020
 
-length(unique(catch.all.2019$LTFishIDAutonumber))
+(catch.all.yrselect <- catch.all %>% 
+  filter(yr %in% yr.select) %>% 
+  filter(species %in% "LT"))
+
+(LTcaught.yrselect <- length(unique(catch.all.yrselect$LTFishIDAutonumber)))
+
+
 
 #how many were male?
 
