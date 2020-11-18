@@ -14,6 +14,7 @@ library(RODBC)
 library(dplyr)
 library(lubridate)
 library(tidyr)
+library(ggplot2)
 
 #Open "channel" to database to extract data tables. Close connection when done #
 # Troubleshooting Issues:
@@ -155,7 +156,7 @@ LT.IDR <- LT.ID %>%
   mutate(yr.class = year(FishFinal_Age_Date)-FishFinal_Age) %>% 
   mutate(ageatyr.select = yr.select-yr.class) %>% 
   mutate(hatchery = ifelse(LTRecapIdentifier=="Hatchery Cohort", "yes","no")) %>% 
-  dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery, LTRecapIdentifier)
+  dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
 
 
 # theoretical freq of fish of diff ages in the selected year (not all would be alive still)
@@ -186,7 +187,7 @@ unique(bycatch$ByCatchSpecies)
 bycatchR <- bycatch %>% 
   dplyr::select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
          count = ByCatchCount,datetime = ByCatchDate) %>% 
-  mutate(yr = year(datetime), species = as.character(species))
+  mutate(yr = year(datetime), species = as.character(species), fate= "e")
 str(bycatchR)
 
 #add catchR colnames to bycatchr for rbind (probably a better way of doing this...)
@@ -234,15 +235,16 @@ yr.select <- 2020
 (LTcaught.yrselect <- length(unique(catch.all.yrselect$LTFishIDAutonumber)))
 
 
-
 #how many were male?
 
-catch.all.2019m <- catch.all %>% 
-  filter(yr %in% 2019) %>% 
-  filter(species %in% "LT") %>% 
-  filter(sex %in% "m")
+nrow(catch.all.yrselect %>% 
+  filter(sex %in% "m"))
 
-length(unique(catch.all.2019m$LTFishIDAutonumber))
+#small plots
+
+ggplot(catch.all.yrselect)+
+  geom_histogram(aes(x=FL,fill=sex), binwidth=30, col="black")+
+  ggtitle(label=paste(yr.select, "spawner FL"))
 
 
 
