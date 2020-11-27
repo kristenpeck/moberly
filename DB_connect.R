@@ -26,8 +26,13 @@ library(ggplot2)
 
 #NOTE: you need to be connected to the network files (VPN) and have access to the FSJ network files
 
+# ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+# 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
+# #suddenly not working again! seems to be an issue with the network, since the below works with a copy:
+
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
+	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy17-Nov-2020.accdb")
+
 
 
 sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
@@ -445,8 +450,8 @@ ggplot(catch.all.yrselect)+
 # 
 # 
 ls()
- rm("ch","bycatch","catch","env","effort","catch.all.2019","catch.all.2019m",
-    "yr.select", "LT.ID")
+ rm("ch","bycatch","catch","env","effort",
+    "yr.select", "LT.ID", "list.names", "temp.df")
 # ls()
 # 
 # 
