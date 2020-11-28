@@ -11,6 +11,7 @@
 #install.packages("RODBC", "dplyr", "lubridate")
 
 library(RODBC)
+library(plyr)
 library(dplyr)
 library(lubridate)
 library(tidyr)
@@ -89,7 +90,7 @@ effortR %>%
 #which efforts do not have their locations defined? Probably lots at the moment, should go back and correct these
 effortR %>%
   filter(UTME == 111111) %>% 
-  select(EffortAutoNumber, field.ID,end.datetime, UTME, UTMN, survey.type) %>% 
+  dplyr::select(EffortAutoNumber, field.ID, end.datetime, UTME, UTMN, survey.type) %>% 
   arrange(desc(end.datetime))
 
 #visual check to see that months were correctly classified into seasons
@@ -127,24 +128,24 @@ effortR <- effortR %>%
 
 #anyDuplicated(effortR$EffortAutoNumber)
 
-#Note also that any env measures NOT associated with an effort will be excluded, 
+#Note also that any env measures NOT associated with an effort won't be there, 
 # because these are not currently allowed in the DB
 
 # Secchi measurements:
 
 effortR %>% 
-  select(yr, month, secchi) %>% 
+  dplyr::select(yr, month, secchi) %>% 
   filter(!is.na(secchi)) %>% 
   arrange(yr, month)
 
 #Ave. surface temps during spawner survey:
 
 effortR %>% 
-  select(yr, month, survey.type, temp) %>% 
+  dplyr::select(yr, month, survey.type, temp) %>% 
   filter(survey.type %in% "Spawner Sampling/Tagging") %>% 
   filter(!is.na(temp)) %>% 
   group_by(yr) %>% 
-  summarize(ave.temp = mean(temp), sd.temp= sd(temp, na.rm=T))
+  dplyr::summarize(ave.temp = mean(temp), sd.temp= sd(temp, na.rm=T))
 
 
 

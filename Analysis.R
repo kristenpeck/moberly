@@ -12,13 +12,12 @@
 # Db.connect <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
 
 library(FSA)
-library(plyr); library(dplyr)
+library(plyr) 
+library(dplyr)
+library(ggplot2)
 
 
 # library(data.table)
-# library(FSA)
-# library(RMark)
-# library(RODBC)
 # library(car)
 
 options(digits=4) #limits printed numbers to 4 sig. digits
@@ -35,29 +34,28 @@ ls()
 
 #### Summarize basic data ####
 
-str(effort.catch)
-
-year = 2019
+#### ### SELECTIONS: ### ####
+yr.select = 2020
 
 unique(effort.catch$survey.type)
-survey = "Spawner Sampling/Tagging"
+surv.select = "Spawner Sampling/Tagging"
+
+### ###
 
 
 # how many LT were caught in given year during a given survey?
 
-temp <- effort.catch %>% 
+effort.catch %>% 
   filter(species %in% "LT") %>% 
-  filter(yr %in% year) %>% 
-  filter(survey.type %in% survey)
-
-summarise(temp, 
-          year = year,
-          tot.nets = length(unique(EffortAutoNumber)),
+  filter(yr %in% yr.select) %>% 
+  filter(survey.type %in% surv.select) %>% 
+  summarise(year = yr.select,
+          tot.netswithLT = length(unique(EffortAutoNumber)),
           tot.uniqueLT = length(unique(LTFishIDAutonumber)),
           tot.males = length(which(sex %in% "m")))
 
 # who was caught more than once during the survey?
-temp$LTFishIDAutonumber[which(duplicated(temp$LTFishIDAutonumber))]
+#temp$LTFishIDAutonumber[which(duplicated(temp$LTFishIDAutonumber))]
 
 
 #############################################
@@ -66,33 +64,34 @@ temp$LTFishIDAutonumber[which(duplicated(temp$LTFishIDAutonumber))]
 # FL for Spawner surveys by year for Males only 2008 and later after more effort 
 # put into mark recapture netting
 str(effort.catch)
-levels(effort.catch$survey.type)
+unique(effort.catch$survey.type)
 unique(effort.catch$yr)
 
-headtail(tmp  <- effort.catch %>% 
-           filterD(EffortAutoNumber,
-                   survey.type=="Spawner Sampling/Tagging",
-                   species=="LT",
-                   sex=="m") %>%
+tmp  <- effort.catch %>% 
+           filter(survey.type %in% surv.select,
+                   species %in% "LT",
+                   sex %in% "m") %>%
            mutate(fyr=as.factor(yr),
-                  species=as.character(species))) #use filter to analyze different years, sizes, lakes, etc
+                  species=as.character(species))
+           
+summary <- tmp %>% 
+          group_by(yr) %>%
+          dplyr::summarize(meanFL=round(mean(FL,na.rm=TRUE),2),
+            seFL=round(se(FL,na.rm=TRUE),2),
+            nFL=sum(count),
+            meanWT=round(mean(WT,na.rm=TRUE),2),
+            seWT=round(se(WT,na.rm=TRUE),2),
+            nWT=sum(count),
+            meanK=round(mean(condition,na.rm=TRUE),2),
+            secondition=round(se(condition,na.rm=TRUE),2),
+            nK=sum(count)) %>% mutate(lciFL=round(meanFL-qt(1-(0.05/2),nFL-1)*seFL,2),
+                                 uciFL=round(meanFL+qt(1-(0.05/2),nFL-1)*seFL,2))
 
-headtail(summary <- tmp %>%  
-           group_by(yr) %>% 
-           summarize(meanFL=round(mean(FL,na.rm=TRUE),2),
-                     seFL=round(se(FL,na.rm=TRUE),2),
-                     nFL=sum(count),
-                     meanWT=round(mean(WT,na.rm=TRUE),2),
-                     seWT=round(se(WT,na.rm=TRUE),2),
-                     nWT=sum(count),
-                     meanK=round(mean(condition,na.rm=TRUE),2),
-                     secondition=round(se(condition,na.rm=TRUE),2),
-                     nK=sum(count)) %>% 
-           mutate(fyr=as.factor(yr),
-                  lciFL=round(meanFL-qt(1-(0.05/2),nFL-1)*seFL,2),
-                  uciFL=round(meanFL+qt(1-(0.05/2),nFL-1)*seFL,2)) %>% 
-           as.data.frame())
-summary2 <- summary %>% filterD(yr>=2008)
+#note that this may be double-counting males that were recaught within a given year - need to remove
+#these guys
+
+
+summary2 <- summary %>% filter(yr>=2008)
 
 ##########################################################
 # ANOVA male LT fork length in fall mark-recap survey ####
@@ -112,28 +111,39 @@ str(summary2)
 #####################################
 #### Plot - mean male spawner FL ####
 #####################################
-library(ggplot2)
 
-setwd(outputs2018)
-png("0Male_mean_fork_length_2008-2018.png",width = 800, height = 550)
 
-(ggplot(summary, aes(x=as.factor(yr), y=meanFL)) +
-    geom_point(data=summary, size=4, shape=1) +
-    geom_point(data=summary2, size=4) +
-    geom_errorbar(data=summary,width=0.2, aes(ymin=meanFL-seFL,ymax=meanFL+seFL)) +
-    geom_text(data=summary2, label=summary2$sigletter, aes(y=uciFL+25)) +
-    geom_text(label=summary$nFL,aes(y=400), hjust=-0.1) + 
-    ylab(label="Mean Male Fork Length (mm)") + xlab(label="Year") +
-    scale_y_continuous(limits=c(400,800),breaks=seq(400,800,50)) +
-    theme_classic(base_size = 16) +
-    geom_text(label=paste("n="),aes(y=400),hjust=1))
-
-dev.off()
-
+# png("0Male_mean_fork_length_2008-2020.png",width = 800, height = 550)
+# 
+# (ggplot(summary, aes(x=yr, y=meanFL)) +
+#     geom_point(data=summary, size=4, shape=1) +
+#     geom_point(data=summary2, size=4) +
+#     geom_errorbar(data=summary,width=0.2, aes(ymin=meanFL-seFL,ymax=meanFL+seFL)) +
+#     geom_text(data=summary2, label=summary2$sigletter, aes(y=uciFL+25)) +
+#     geom_text(label=summary$nFL,aes(y=400), hjust=-0.1) + 
+#     ylab(label="Mean Male Fork Length (mm)") + xlab(label="Year") +
+#     scale_y_continuous(limits=c(400,900),breaks=seq(400,900,50)) +
+#     theme_classic(base_size = 16) +
+#     geom_text(label=paste("n="),aes(y=400),hjust=1))
+# 
+# dev.off()
 
 
 
-###############################################
+(fig_male_mn_FL_2008to2020 <- ggplot(summary, aes(x=yr, y=meanFL)) +
+  geom_point(aes(size=nFL)) +
+  geom_errorbar(width=0.2, aes(ymin=meanFL-seFL,ymax=meanFL+seFL)) +
+  labs(x="Year", y="Fork Length (mm)", size="# LT \nsampled")+
+  scale_y_continuous(breaks=seq(400,900,50))+
+  scale_x_continuous(breaks=seq(2005,yr.select,1))+
+  theme_bw())
+
+ggsave(plot = fig_male_mn_FL_2008to2020, "0Male_mean_fork_length_2008-2020.png", h=4, w=7)
+
+
+
+
+############################################### ***NOT UPDATED
 #### Summarize - FL - FALL SPAWNER females ####
 ###############################################
 # FL for Spawner surveys by year for females only 2008 and later after more effort 
@@ -199,22 +209,23 @@ dev.off()
 ################
 # SLIN CPUE #### 
 ################
+
+unique(effort.catch$survey.type)
+
 headtail(tmp  <- effort.catch %>% 
-           filterD(EffortAutoNumber,
-                   survey.type=="SLIN - Spring Littoral Index Netting") %>%
+           filter(survey.type %in% "SLIN - Spring Littoral Index Netting") %>%
            mutate(fyr=as.factor(yr),
                   species=as.character(species),
-                  soaktime=as.numeric(soaktime))) #use filter to analyze different years, sizes, lakes, etc
-levels(tmp$maturity)
+                  soaktime=as.numeric(soaktime))) 
 
-# count number of each species by unique effort
-headtail(tmp <- tmp %>% 
-           group_by(EffortAutoNumber,species) %>% 
-           summarize(count=sum(count)) %>% 
-           as.data.frame()) 
 
-tmp$species <- ifelse(tmp$species=="NFC","",tmp$species) # covert NFC to ""
-tmp$count <- ifelse(tmp$count=="NA",0,tmp$count) # convert NA counts to 0's
+# count number of each species captured by yr
+tmp %>% 
+           group_by(yr,species) %>% 
+           dplyr::summarize(count=sum(count))
+
+# tmp$species <- ifelse(tmp$species=="NFC","",tmp$species) # covert NFC to ""
+# tmp$count <- ifelse(tmp$count=="NA",0,tmp$count) # convert NA counts to 0's
 
 # IMPORTANT Add zero catch for nets with no catch of certain species
 headtail(tmp <- tmp %>% 
