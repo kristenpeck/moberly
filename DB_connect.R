@@ -32,7 +32,7 @@ library(ggplot2)
 # #suddenly not working again! seems to be an issue with the network, since the below works with a copy:
 
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy17-Nov-2020.accdb")
+	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy03-Dec-2020.accdb")
 
 
 
@@ -50,7 +50,7 @@ odbcCloseAll()
 
 # ACTIONS TO DO: ####
 # - mark whether fish is recap or not in any given year to quickly summarize
-
+# - print a copy of effort and catch for most recent year to QA data entry
 
 
 #### EFFORT ####
@@ -224,10 +224,28 @@ unique(effort.catch$species)
 
 
 
-#do all catch dates match the effort dates? seems like they do, since no extra column is made for catch datatime
+#do all catch dates match the effort dates? seems like they do, 
+#since no extra column is made for catch datatime
 
 
 ### Small Queries ####
+
+#print out effort sheet and catch sheet for most recent year for easy QA
+names(effortR)
+
+effort.QA <- effortR %>% 
+  filter(yr %in% yr.select) %>% 
+  select(field.ID, gear.type, mesh,shoal,UTME, UTMN, bottom.depth3, st.datetime, 
+         end.datetime, temp) %>% 
+  arrange(field.ID)
+
+names(catch.all)
+
+catch.QA <- catch.all %>% 
+  filter(yr %in% yr.select) %>% 
+  select(LTFishIDAutonumber, datetime, EffortAutoNumber, species, count, FL, WT, sex) %>% 
+  arrange(datetime)
+
 
 #how many individual fish were caught on shoals in a given year?
 str(catch.all)
