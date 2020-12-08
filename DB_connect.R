@@ -31,10 +31,11 @@ library(ggplot2)
 # 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
 # #suddenly not working again! seems to be an issue with the network, since the below works with a copy:
 
+
+### Connect to Moberly Database ####
+
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy03-Dec-2020.accdb")
-
-
 
 sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
 
@@ -42,11 +43,12 @@ effort <- sqlFetch(ch, "TABLE - Effort Information")
 env <- sqlFetch(ch,"TABLE - Environmental Info")
 catch <- sqlFetch(ch,"TABLE - All Fish Capture Measurements")
 bycatch <- sqlFetch(ch,"TABLE - By-Catch Summary Capture Info")
-LT.ID <-  sqlFetch(ch,"TABLE - Specific Fish ID Info")
+LT.ID <-  sqlFetch(ch,"TABLE - Specific Fish ID Info", na.strings = "NA")
 
 odbcCloseAll()
 
 
+str(LT.ID)
 
 # ACTIONS TO DO: ####
 # - mark whether fish is recap or not in any given year to quickly summarize
@@ -230,21 +232,26 @@ unique(effort.catch$species)
 
 ### Small Queries ####
 
-#print out effort sheet and catch sheet for most recent year for easy QA
-names(effortR)
+#print out effort and catch sheet for select year for visual comparison to datasheets
 
-effort.QA <- effortR %>% 
-  filter(yr %in% yr.select) %>% 
-  select(field.ID, gear.type, mesh,shoal,UTME, UTMN, bottom.depth3, st.datetime, 
+yr.select <- 2017
+
+(effort.QA <- effortR %>% 
+  filter(yr %in% yr.select, season %in% "fall") %>% 
+  mutate(field.IDnum = as.numeric(field.ID)) %>% 
+  select(field.ID, field.IDnum, gear.type, mesh,shoal,UTME, UTMN, bottom.depth3, st.datetime, 
          end.datetime, temp) %>% 
-  arrange(field.ID)
+  arrange(field.IDnum))
+#survey.type %in% "Spawner Sampling/Tagging"
 
-names(catch.all)
 
-catch.QA <- catch.all %>% 
-  filter(yr %in% yr.select) %>% 
-  select(LTFishIDAutonumber, datetime, EffortAutoNumber, species, count, FL, WT, sex) %>% 
-  arrange(datetime)
+
+(catch.QA <- effort.catch %>% 
+    filter(yr %in% yr.select, season %in% "fall") %>% 
+    mutate(field.IDnum = as.numeric(field.ID)) %>% 
+    select(LTFishIDAutonumber, datetime, EffortAutoNumber, field.IDnum,species, count, FL, WT, sex) %>% 
+    arrange(field.IDnum))
+
 
 
 #how many individual fish were caught on shoals in a given year?
@@ -273,50 +280,89 @@ ggplot(catch.all.yrselect)+
 
 
 
-###############################################
-###############################################
-##########    QA     ########################## NOT YET UPDATED KP/10-March-2020
-###############################################
-###############################################
+
+###    QA     ########################## PARTIALLY UPDATED KP/7-Dec-2020
 
 
 
-# ### QA effort 
+### QA effort ####
 # 
 # ## Check list of surveys: 
-# str(effortR)
-# effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
-# effortR <- effortR[order(effortR$season.yr.survey),]
-# 
-# uniq <- data.frame(table(effortR$season.yr.survey))
-# colnames(uniq) <- c("Sampling Event","Number of Efforts")
-# uniq$Year <- substr(uniq[,1], 1,4)
-# 
-# uniq
-# 
-# 
-# #setwd(Db.connect)
-# #write.csv(uniq, "sampling events.csv", row.names=F)
-# 
-# 
-# 
-# 
-# ### QA catch
-# 
-# # check for NFCs (efforts without corresponding catch) with additional catches
-# #nfcs <- catch.all[which(catch.all$species=="NFC"),"catchID"]
-# #catch.all[which(catch.all$catchID==nfcs),]
-# #length(nfcs)== nrow(catch.all[which(catch.all$catchID==nfcs),])
-# # If there are no errors, this should be "TRUE"
-# 
-# catch[which(catch$species=="LT"),30:36]
-# str(catch)
-# 
-# 
-# 
-# 
-# 
-# ### QA LT.IDs 
+str(effortR)
+effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
+effortR <- effortR[order(effortR$season.yr.survey),]
+
+uniq <- data.frame(table(effortR$season.yr.survey))
+colnames(uniq) <- c("Sampling Event","Number of Efforts")
+uniq$Year <- substr(uniq[,1], 1,4)
+
+uniq
+
+
+ 
+### QA catch #### 
+
+#check for NFCs (efforts without corresponding catch) with additional catches
+#except that I put the NFCs in at the catch.effort level, so this needs updating
+
+(nfcs <- catch.all[which(catch.all$species=="NFC"),"catchID"])
+
+length(nfcs) == nrow(catch.all[which(catch.all$catchID %in% nfcs),])
+#If there are no errors, this should be "TRUE"
+
+
+
+
+
+
+### QA LT.IDs ####
+
+#by year:
+unique(effort.catch$survey.type)
+
+(check.yr <- effort.catch %>% 
+  filter(survey.type %in% "Non-Random Sampling") %>% 
+  filter(yr %in% 2017, season %in% "fall") %>%
+  filter(species %in% "LT") %>% 
+  select(-c(survey.type,gear.type)) %>% 
+  mutate(fieldIDnum = as.numeric(field.ID)) %>% 
+  group_by(fieldIDnum) %>% 
+  summarize(length(fieldIDnum)) %>% 
+  arrange(fieldIDnum))
+
+#"Non-Random Sampling"
+#"Spawner Sampling/Tagging"
+
+unique(effort.catch$survey.type)
+
+#2020 - good
+#2019 - totals correct; net totals good
+#2018 - totals correct; net totals good
+#2017 - seems good - rechecked data sheets and totals
+
+
+length(unique(catch$LTFishID_Autonumber)) #this is how many records should be in the LTID table
+nrow(LT.ID) #this is how many we actually have
+
+#pick out LT IDs that have no associated catch:
+homelessLT <- anti_join(LT.ID,catch, by=c( "LTFishIDAutonumber"="LTFishID_Autonumber"))
+
+homelessLT$LTFishIDAutonumber
+
+write.csv(homelessLT, "homelessLT.csv")
+
+dup.select <- "LTFLOYID1"
+
+LT.QA <- LT.ID %>% 
+  filter(!is.na(dup.select)) 
+
+LT.QA[which(duplicated(LT.QA$LTFLOYID2) == TRUE),c("LTFishIDAutonumber","LTFLOYID2")]
+
+
+LT.ID[which(duplicated(!is.na(LT.ID$LTFLOYID1))=="TRUE"),c("LTFishIDAutonumber","LTFLOYID1")]
+
+which(LT.ID$LTFLOYID1 == "o - 01917")
+
 # 
 # LT <- LT.ID[(which(LT.ID$FishSpecies=="LT")),]
 # str(LT)
