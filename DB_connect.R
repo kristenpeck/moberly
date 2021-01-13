@@ -6,9 +6,9 @@
 #         You can do this with Tools -> Global Options -> General and select the 32-bit version in "R version"
 
 
-### Author: Kristen Peck, Dec-2017
+### Author: Kristen Peck, begun Dec-2017
 
-#install.packages("RODBC", "dplyr", "lubridate")
+
 
 library(RODBC)
 library(plyr)
@@ -17,15 +17,17 @@ library(lubridate)
 library(tidyr)
 library(ggplot2)
 
+
 #Open "channel" to database to extract data tables. Close connection when done #
 # Troubleshooting Issues:
 # CHECK NAME OF MASTER DB and file path if this doesn't work. 
-# Try the other "bit" version of R (32-bit or 64-bit)
-# after "refresh" the driver may not be installed correctly. 
+# Try the other "bit" version of R (32-bit or 64-bit) using Tools -> Global Options
+# after government computer "refresh" the driver may not be installed correctly. 
 # Read thru this site and see if it helps: https://docs.microsoft.com/en-us/office/troubleshoot/access/cannot-use-odbc-or-oledb
 # I installed a 64-bit driver and it solved my connection issues
 
 #NOTE: you need to be connected to the network files (VPN) and have access to the FSJ network files
+# if you run the following code. If not, you can copy over a copy of the DB onto your C drive
 
 # ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 # 	DBQ=//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/Data/Database/Moberly Fish Database-MASTER/Moberly Fish Database-MASTER.accdb")
@@ -48,7 +50,6 @@ LT.ID <-  sqlFetch(ch,"TABLE - Specific Fish ID Info", na.strings = "NA")
 odbcCloseAll()
 
 
-str(LT.ID)
 
 # ACTIONS TO DO: ####
 # - mark whether fish is recap or not in any given year to quickly summarize
@@ -130,8 +131,8 @@ effortR <- effortR %>%
 
 #anyDuplicated(effortR$EffortAutoNumber)
 
-#Note also that any env measures NOT associated with an effort won't be there, 
-# because these are not currently allowed in the DB
+#Note also that any env measures NOT associated with an effort (e.g. CTD profiles, some secchis) 
+# won't be there, because these are not currently allowed in the DB
 
 # Secchi measurements:
 
@@ -154,28 +155,29 @@ effortR %>%
 
 #### CATCH and BYCATCH ####
 
-#get sex and age from LT.ID table to add to general catch table and clean up catch table
+#gets sex and age from LT.ID table to add to general catch table and clean up catch table
 # need to select the year of interest (e.g. most recent sampling year) to calculate ages to that date
 
 yr.select <- 2020
 
+
+
 LT.IDR <- LT.ID %>% 
   mutate(sex = as.character(FishSex)) %>%
   mutate(yr.class = year(FishFinal_Age_Date)-FishFinal_Age) %>% 
-  mutate(ageatyr.select = yr.select-yr.class) %>% 
-  mutate(hatchery = ifelse(LTRecapIdentifier=="Hatchery Cohort", "yes","no")) %>% 
+  mutate(ageatyr.select = yr.select-yr.class) %>%  #this is an age if they are caught
+  mutate(hatchery = ifelse(LTRecapIdentifier %in% "Hatchery Cohort", "yes","no")) %>% 
   dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
 
 
-# theoretical freq of fish of diff ages in the selected year (not all would be alive still)
-hist(LT.IDR$ageatyr.select)
 
-#attribute fish year class from LT.ID table. This should be interpreted as =/- 0.5-1 year old,
+#attribute fish year class to catch in given year from LT.ID table. 
+# This should be interpreted as =/- 0.5-1 year old,
 #since some age samples were collected in spring, some in summer, some in fall...
-# and all are likely somewhat inaccurate
+# and all are likely somewhat inaccurate since they are mostly Fin Rays of older fish
 
 
-#add sex, whether hatchery, and yr.class to catch
+#add sex, hatchery origin, theoretical age at selected year, and yr.class from LT.ID to catch
 catchR <- catch %>% 
   dplyr::select(EffortAutoNumber=EffortAutoNumber_AllFish, LTFishIDAutonumber=LTFishID_Autonumber, 
                 species=CaptureSpecies, FL=`CaptureFork Length`,WT=CaptureWeight, 
@@ -195,11 +197,11 @@ unique(bycatch$ByCatchSpecies)
 bycatchR <- bycatch %>% 
   dplyr::select(EffortAutoNumber=EffortAutoNumber_ByCatch, species=ByCatchSpecies, 
          count = ByCatchCount,datetime = ByCatchDate) %>% 
-  mutate(yr = year(datetime), species = as.character(species), fate= "e")
+  mutate(yr = year(datetime), species = as.character(species), fate= "e") #"e" for "escaped" for LTs...
 str(bycatchR)
 
-#add catchR colnames to bycatchr for rbind (probably a better way of doing this...)
 
+#add catchR colnames to bycatchr for rbind (probably a better way of doing this...)
 
 list.names <- setdiff(names(catchR),names(bycatchR))
 temp.df <- data.frame(matrix(nrow = nrow(bycatchR),ncol=length(list.names)))
@@ -211,7 +213,7 @@ bycatchRmerge <- cbind(bycatchR, temp.df)
 
 catch.all <- rbind(catchR, bycatchRmerge)
 
-catch.all$catchID <- 1:nrow(catch.all) #**** what was this for??
+catch.all$catchID <- 1:nrow(catch.all) #**** can't recall what was this for??
 
 str(catch.all)
 
@@ -222,19 +224,22 @@ effort.catch <- effortR %>%
   full_join(catch.all) %>% 
   mutate(species = ifelse(is.na(species),"NFC", species)) # insert "NFC" where there is no corresponding catch for effort
 
-unique(effort.catch$species)
+#Check if the number of rows from a full_join are equal to a left_join. In other words, 
+#check if there are any excess catches that do not match an effort (shouldn't be possible..):
+# effort.catch2 <- effortR %>% 
+#   left_join(catch.all) %>% 
+#   mutate(species = ifelse(is.na(species),"NFC", species)) # insert "NFC" where there is no corresponding catch for effort
+# 
+# nrow(effort.catch) == nrow(effort.catch2) #should be TRUE if all is well
 
 
-
-#do all catch dates match the effort dates? seems like they do, 
-#since no extra column is made for catch datatime
 
 
 ### Small Queries ####
 
 #print out effort and catch sheet for select year for visual comparison to datasheets
 
-yr.select <- 2017
+yr.select <- 2020
 
 (effort.QA <- effortR %>% 
   filter(yr %in% yr.select, season %in% "fall") %>% 
@@ -257,7 +262,7 @@ yr.select <- 2017
 #how many individual fish were caught on shoals in a given year?
 str(catch.all)
 
-yr.select <- 2020
+yr.select <- 2019
 
 (catch.all.yrselect <- catch.all %>% 
   filter(yr %in% yr.select) %>% 
@@ -274,7 +279,7 @@ nrow(catch.all.yrselect %>%
 #small plots
 
 ggplot(catch.all.yrselect)+
-  geom_histogram(aes(x=FL,fill=sex), binwidth=30, col="black")+
+  geom_histogram(aes(x=FL,fill=sex), binwidth=20, col="black")+
   ggtitle(label=paste(yr.select, "spawner FL"))
 
 
@@ -302,97 +307,81 @@ uniq
  
 ### QA catch #### 
 
-#check for NFCs (efforts without corresponding catch) with additional catches
-#except that I put the NFCs in at the catch.effort level, so this needs updating
-
-(nfcs <- catch.all[which(catch.all$species=="NFC"),"catchID"])
-
-length(nfcs) == nrow(catch.all[which(catch.all$catchID %in% nfcs),])
-#If there are no errors, this should be "TRUE"
-
-
 
 
 
 
 ### QA LT.IDs ####
 
-#by year:
-unique(effort.catch$survey.type)
 
-(check.yr <- effort.catch %>% 
-  filter(survey.type %in% "Non-Random Sampling") %>% 
-  filter(yr %in% 2017, season %in% "fall") %>%
-  filter(species %in% "LT") %>% 
-  select(-c(survey.type,gear.type)) %>% 
-  mutate(fieldIDnum = as.numeric(field.ID)) %>% 
-  group_by(fieldIDnum) %>% 
-  summarize(length(fieldIDnum)) %>% 
-  arrange(fieldIDnum))
 
-#"Non-Random Sampling"
-#"Spawner Sampling/Tagging"
-
-unique(effort.catch$survey.type)
-
-#2020 - good
-#2019 - totals correct; net totals good
-#2018 - totals correct; net totals good
-#2017 - seems good - rechecked data sheets and totals
-
+#***Newly found issue!**
 
 length(unique(catch$LTFishID_Autonumber)) #this is how many records should be in the LTID table
 nrow(LT.ID) #this is how many we actually have
 
 #pick out LT IDs that have no associated catch:
-homelessLT <- anti_join(LT.ID,catch, by=c( "LTFishIDAutonumber"="LTFishID_Autonumber"))
+homelessfish <- anti_join(LT.ID,catch, by=c( "LTFishIDAutonumber"="LTFishID_Autonumber"))
+
+homelessfish$LTFishIDAutonumber
+
+nrow(homelessLT <- homelessfish %>% 
+  filter(FishSpecies %in% "LT"))
 
 homelessLT$LTFishIDAutonumber
+#There are only 11 LT in this group. 
 
-write.csv(homelessLT, "homelessLT.csv")
+write.csv(homelessLT, "homelessLT.csv") #visually check homeless LT against DB
 
-dup.select <- "LTFLOYID1"
+
+
+#check if there are duplicate historic fish IDs
+LT.ID[which(data.frame(table(LT.ID$LTFishIDHistoric))$Freq>1),1:5] #corrected one, sould be none now
+
+
+# check to see if there are duplicate floys or PITs in different fish
+
+
+#duplicate FLOY1
+LT.QA <- LT.ID %>% 
+  filter(!is.na(LTFLOYID1)) 
+which(duplicated(LT.QA$LTFLOYID1)== TRUE)
 
 LT.QA <- LT.ID %>% 
-  filter(!is.na(dup.select)) 
+  filter(!is.na(LTFLOYID2)) 
+which(duplicated(LT.QA$LTFLOYID2)== TRUE)
 
-LT.QA[which(duplicated(LT.QA$LTFLOYID2) == TRUE),c("LTFishIDAutonumber","LTFLOYID2")]
+LT.QA <- LT.ID %>% 
+  filter(!is.na(LTFLOYID3)) 
+which(duplicated(LT.QA$LTFLOYID3)== TRUE)
+
+#*note that the above does not check whether there is the same floy in FLOY2, for e.g. 
+# should use something like grep for that... with a loop or apply function like below
 
 
-LT.ID[which(duplicated(!is.na(LT.ID$LTFLOYID1))=="TRUE"),c("LTFishIDAutonumber","LTFLOYID1")]
 
-which(LT.ID$LTFLOYID1 == "o - 01917")
 
-# 
-# LT <- LT.ID[(which(LT.ID$FishSpecies=="LT")),]
-# str(LT)
-# 
-# #check if any have dec tag, but no hex tag (preferred). Should be "integer(0)"
-# which(!is.na(LT$LTPitTag_DEC_ID_1)& is.na(LT$LTPitTag_HEX_ID_1))
-# which(!is.na(LT$LTPitTag_DEC_ID_2)& is.na(LT$LTPitTag_HEX_ID_2))
-# which(!is.na(LT$LTPitTag_DEC_ID_3)& is.na(LT$LTPitTag_HEX_ID_3))
-# 
-# #check if any have duplicate tag information (PIT tags)
-# #simple:
-# dup <- data.frame(table(LT$LTPitTag_HEX_ID_1))
-# dup[which(dup[,2]>1),1]
+#check if any have duplicate tag information (PIT tags)
+#simple:
+dup <- data.frame(table(LT.ID$LTPitTag_HEX_ID_1))
+dup[which(dup[,2]>1),1]
 # 
 # #complex:
 # 
-# LT$LTPitTag_HEX_ID_1 <- as.character(LT$LTPitTag_HEX_ID_1)
-# LT$LTPitTag_HEX_ID_2 <- as.character(LT$LTPitTag_HEX_ID_2)
-# LT$LTPitTag_HEX_ID_3 <- as.character(LT$LTPitTag_HEX_ID_3)
-# 
-# LT$tags <- paste(LT$LTPitTag_HEX_ID_1, LT$LTPitTag_HEX_ID_2, LT$LTPitTag_HEX_ID_3)
-# 
-# hex1 <- NA
-# length(hex1) <- nrow(LT)
-# for (i in 1:nrow(LT)){
-#   hex1[i] <- length(which(grepl(LT$LTPitTag_HEX_ID_1[i],LT$tags)== TRUE))
-# }
-# LT[which(hex1 > 1),c("LTFishIDAutonumber","tags")] 
-# #Fish # 642 + 503 not currently fixable, but pay attention to others
-# 
+LT.ID$LTPitTag_HEX_ID_1 <- as.character(LT.ID$LTPitTag_HEX_ID_1)
+LT.ID$LTPitTag_HEX_ID_2 <- as.character(LT.ID$LTPitTag_HEX_ID_2)
+LT.ID$LTPitTag_HEX_ID_3 <- as.character(LT.ID$LTPitTag_HEX_ID_3)
+
+LT.ID$tags <- paste(LT.ID$LTPitTag_HEX_ID_1, LT.ID$LTPitTag_HEX_ID_2, LT.ID$LTPitTag_HEX_ID_3)
+
+hex1 <- NA
+length(hex1) <- nrow(LT.ID)
+for (i in 1:nrow(LT.ID)){
+  hex1[i] <- length(which(grepl(LT.ID$LTPitTag_HEX_ID_1[i],LT.ID$tags)== TRUE))
+}
+LT.ID[which(hex1 > 1),c("LTFishIDAutonumber","tags")]
+#Fish # 642 + 501 not currently fixable, but pay attention to others
+
 # hex2 <- NA
 # length(hex2) <- nrow(LT)
 # for (i in 1:nrow(LT)){
@@ -511,13 +500,11 @@ which(LT.ID$LTFLOYID1 == "o - 01917")
 # 
 # 
 # 
-# #for clean "source" run in other scripts:
+# #for clean "source" run in other scripts, remove all extra objects:
 # 
-# 
-ls()
- rm("ch","bycatch","catch","env","effort",
-    "yr.select", "LT.ID", "list.names", "temp.df")
-# ls()
+
+rm(list=setdiff(ls(),c("bycatchR", "catch.all", "catchR", "effort.catch", "effortR", "envR", "LT.IDR")))
+
 # 
 # 
 # 
