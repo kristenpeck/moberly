@@ -37,7 +37,7 @@ library(ggplot2)
 ### Connect to Moberly Database ####
 
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy03-Dec-2020.accdb")
+	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy12-Jan-2020.accdb")
 
 sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
 
@@ -307,9 +307,13 @@ uniq
  
 ### QA catch #### 
 
+#check to see if fate = m? (suspected morts) were followed by a lively recapture
 
+str(catchR)
 
-
+unique(catchR$fate)
+catchR[which(catchR$fate %in% "m?"),] #I just checked these manually. No alive recaptures 
+catchR[which(is.na(catchR$fate)),]  #lots of fish with no fate. Assume alive.
 
 ### QA LT.IDs ####
 
@@ -331,7 +335,7 @@ nrow(homelessLT <- homelessfish %>%
 homelessLT$LTFishIDAutonumber
 #There are only 11 LT in this group. 
 
-write.csv(homelessLT, "homelessLT.csv") #visually check homeless LT against DB
+#write.csv(homelessLT, "homelessLT.csv") #visually check homeless LT against DB
 
 
 

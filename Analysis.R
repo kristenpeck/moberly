@@ -4,8 +4,9 @@
 
 #Authir: Rick Elsner/ Kristen Peck
 
-### Note: to run the Mob_Db_connect you must be using the 
-# 32 bit version of R (can change this in Tools-> Global Options). Or the 64-bit version, depending on your driver
+### Note: to run the Mob_Db_connect you need to make sure your drivers are installed correctly and 
+# you are pointing at the right database. See Mob_Db_connect for details
+
 
 #setwds
 # outputs2018 <- "//SFP.IDIR.BCGOV/S140/S40023/Environmental Stewardship/Fish/DATA/lakes/Moberly Lake/Data & Analysis/R Scripts & Outputs/2018-2019/Analysis/"
@@ -74,7 +75,7 @@ tmp  <- effort.catch %>%
            mutate(fyr=as.factor(yr),
                   species=as.character(species))
            
-summary <- tmp %>% 
+(summary <- tmp %>% 
           group_by(yr) %>%
           dplyr::summarize(meanFL=round(mean(FL,na.rm=TRUE),2),
             seFL=round(se(FL,na.rm=TRUE),2),
@@ -85,13 +86,13 @@ summary <- tmp %>%
             meanK=round(mean(condition,na.rm=TRUE),2),
             secondition=round(se(condition,na.rm=TRUE),2),
             nK=sum(count)) %>% mutate(lciFL=round(meanFL-qt(1-(0.05/2),nFL-1)*seFL,2),
-                                 uciFL=round(meanFL+qt(1-(0.05/2),nFL-1)*seFL,2))
+                                 uciFL=round(meanFL+qt(1-(0.05/2),nFL-1)*seFL,2)))
 
 #note that this may be double-counting males that were recaught within a given year - need to remove
 #these guys
 
 
-summary2 <- summary %>% filter(yr>=2008)
+(summary2 <- summary %>% filter(yr>=2008))
 
 ##########################################################
 # ANOVA male LT fork length in fall mark-recap survey ####

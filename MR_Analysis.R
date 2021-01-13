@@ -21,6 +21,7 @@ ls()
 
 
 ##### Construct Capture Histories ####
+#need to adjust for effort.catch
 
 catch.history <- effortR %>% 
   dplyr::select(EffortAutoNumber,season,shoal,survey.type,gear.type) %>% 
@@ -30,7 +31,13 @@ catch.history <- effortR %>%
                           fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
   arrange(datetime)
 
-# write.csv(catch.history, "catch.history.csv")
+catch.history <- effort.catch %>% 
+  filter(species %in% "LT") %>% 
+  mutate(freq = case_when(fate %in% c("a",NA) ~ 1,
+                          fate %in% c("m","m?") ~ -1)) %>%   #assume that suspected deaths are real
+  arrange(datetime)
+
+# write.csv(catch.history, "catch.history.csv") 
 # catch.history <- read.csv("catch.history.csv", row.names = NULL)
 # headtail(catch.history)
 
