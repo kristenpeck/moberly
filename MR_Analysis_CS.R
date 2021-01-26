@@ -513,4 +513,4 @@ ggplot(lambda.ests, aes(x=time, y=estimate)) +
   theme_classic()
 
 ######################################################################
-
+cleanup(ask=FALSE)
