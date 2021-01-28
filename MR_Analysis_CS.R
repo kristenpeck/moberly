@@ -44,6 +44,9 @@ catch.history <- effort.catch %>%
 head(catch.history)
 
 catch.history[ is.na(catch.history$LTFishIDAutonumber),]   ## CJS what does a missing LTAutonumber mean? No catch in a net sample?
+# KP: missing LTFishIDAutonumber usually means that we didn't actually get the fish 
+#   into the boat, so these fish would be counted in CPUE but we don't know who they were.
+#   Likely can't do much with them for MR...?
 
 
 # write.csv(catch.history, "catch.history.csv") 
@@ -58,12 +61,17 @@ n.sex[n.sex$n.sex > 1,]  # check that all fish have at most 1 sex
 bad.sex <- n.sex[n.sex$n.sex.all.missing == 1,]  # fish missing sex in all records
 bad.sex
 catch.history$sex[ catch.history$LTFishIDAutonumber %in% bad.sex$LTFishIDAutonumber] <- 'un'  ## CJS how can a fish has missing sex and not 'un'?
+    #KP: I looked back at the data and I'm not entirely sure what this is catching. If fish 
+    # were caught outside of spawning window, sex defaults to "nc"=not checked but if from 
+    # bycatch table would just have an "NA". Anyway I think this chunk is meaningless, so 
+    # will likely delete from script
+
 
 #QA to check if fish were mis-recorded as dead and then found alive
 
 qa.freq <- catch.history %>% 
-  group_by(LTFishIDAutonumber) %>% 
-  summarize(qa.freq = paste(freq, collapse = "" ), qa.sex = paste(sex,collapse = ""))
+  dplyr::group_by(LTFishIDAutonumber) %>% 
+  dplyr::summarize(qa.freq = paste(freq, collapse = "" ), qa.sex = paste(sex,collapse = ""))
 unique(qa.freq$qa.freq) #none of these should have a death in the middle of the series
 unique(qa.freq$qa.sex) #none of these should switch sex in the middle of the series
 
@@ -130,6 +138,11 @@ cols <- names(ch.spawner)[4:ncol(ch.spawner)]
 ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
 headtail(ch.spawner)
 length(cols) #this is the number of events
+
+    #KP: I just noticed that it creates a cap. history for the "NA" fish, which isn't
+    # really an ID (this would mean that we recorded a lost fish from net in any given year). 
+    # These should be removed if doing more than analysis of males.
+
 
 #see if any fish in the dataset have no captures since these will not work in MR analysis
 which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
