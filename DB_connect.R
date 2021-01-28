@@ -170,10 +170,27 @@ LT.IDR <- LT.ID %>%
   dplyr::select(LTFishIDAutonumber, sex, yr.class, ageatyr.select, hatchery)
 
 
+#check if any fish have more than one sex assigned (not actually sure if this is possible in the db...)
+
+LT.IDR %>% 
+  dplyr::filter(!is.na(LTFishIDAutonumber)) %>% 
+  dplyr::group_by(LTFishIDAutonumber) %>% 
+  dplyr::summarize(uniq.sex=length(unique(sex))) %>% 
+  dplyr::filter(uniq.sex >1)
+
+#check if any fish have no sex assigned (not including "un")
+
+LT.IDR %>% 
+  dplyr::filter(!is.na(LTFishIDAutonumber)) %>% 
+  dplyr::group_by(LTFishIDAutonumber) %>% 
+  dplyr::summarize(uniq.sex=length(unique(sex))) %>% 
+  dplyr::filter(uniq.sex <1)
+
+
 
 #attribute fish year class to catch in given year from LT.ID table. 
 # This should be interpreted as =/- 0.5-1 year old,
-#since some age samples were collected in spring, some in summer, some in fall...
+# since some age samples were collected in spring, some in summer, some in fall...
 # and all are likely somewhat inaccurate since they are mostly Fin Rays of older fish
 
 
@@ -218,7 +235,8 @@ catch.all$catchID <- 1:nrow(catch.all) #**** can't recall what was this for??
 str(catch.all)
 
 
-### Merge efforts with catches ##
+
+#### Merge effort and catch ####
 
 effort.catch <- effortR %>% 
   full_join(catch.all) %>% 
