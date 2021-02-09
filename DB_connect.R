@@ -335,7 +335,10 @@ catchR[which(is.na(catchR$fate)),]  #lots of fish with no fate. Assume alive.
 
 ### QA LT.IDs ####
 
-
+# #Query: for interest, generate a table with how many recaps per individual and the max recaps
+# recaps <- data.frame(table(catchR$LTFishIDAutonumber));colnames(recaps) <- c("LT auto ID","times recapped")
+# (recaps[which(recaps[,2]==max(recaps[,2])),])
+# (props <- xtabs(~recaps$`times recapped`))
 
 #***Newly found issue!**
 
