@@ -375,13 +375,15 @@ pradel.ests <- moberly.pradel.mod.avg$estimates
 (lambda.ests <- model.average(moberly.pradel.results, "Lambda")) #, vcv=TRUE
 
 # for plotting
-lambda.ests <- cbind(lambda.ests, moberly.pradel.mod.avg$estimates[moberly.pradel.mod.avg$estimates$par.index %in% lambda.ests$par.index,4:5])
+lambda.ests <- cbind(lambda.ests, moberly.pradel.mod.avg$estimates[moberly.pradel.mod.avg$estimates$par.index %in% lambda.ests$par.index,4:5]) %>% 
+    mutate(plot.time = as.numeric(as.character(time))+0.5)
 
 library(ggplot2)
-ggplot(lambda.ests, aes(x=time, y=estimate)) +
+ggplot(lambda.ests, aes(x=plot.time, y=estimate)) +
   geom_point() +
   geom_errorbar(aes(ymin=lcl, ymax=ucl), width=.1) +   ## CJS I like narrower error bars
-  scale_y_continuous(breaks=seq(0.5,1.75, 0.25), limits=c(0.5,1.75)) +
+  scale_y_continuous(breaks=seq(0.5,1.50, 0.25), limits=c(0.5,1.50)) +
+  scale_x_continuous(breaks=seq(2008, 2020, 1)) +
   xlab(label = "Year") + ylab(label="Lambda estimate (95% ci)") +   ## CJS indicate that bars are 95% ci
   geom_hline(yintercept=1, linetype="dashed" ) +
   theme_classic()
