@@ -289,7 +289,7 @@ pent.dot=list(formula=~1)    #probability of entrance from the superpopulation i
 
 ## CJS   I assume here you want a zero recruitment model. This formula doesn't work (look at estimates when the model is fit)
 pent.zero   =list(formula=~1, fixed=~0)  #sets probablity of entrance to zero (zero recruitment)... added this in 2015 but still need to run it
-## CJS   Note that pents are index for the END of the interval, i.e the pent for 2009 is the pent between 2008 and 2009 (sigh!).
+## CJS   Note that pents are indexed by the END of the interval, i.e the pent for 2009 is the pent between 2008 and 2009 (sigh!).
 pent.zero.cs=list(formula=~1, fixed=list(time=2009:2020,value=0)) 
 pent.time   =list(formula=~time)   ## CJS
 
