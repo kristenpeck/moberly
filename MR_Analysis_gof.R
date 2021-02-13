@@ -10,7 +10,8 @@
 #     at the recaptures after initial tagging and release, i.e. the CJS portion of the
 #     the model. There is usually insufficient information to examine new captures.
 #     Refer to Giminez paper that I've uploaded
-#     and http://www.phidot.org/software/mark/docs/book/pdf/chap5.pdf Section 5.4.1 for the test2 and test3 table
+#     and http://www.phidot.org/software/mark/docs/book/pdf/chap5.pdf Section 5.4.1 
+#     for the test2 and test3 table
 #     construction along with Section 5.5. for more details on UCARE
 #     You can also get this from the release.gof() function in RMark but why bother 
 #     See also https://jamesepaterson.github.io/jamespatersonblog/2020-05-20_gof_for_CJS
@@ -167,10 +168,10 @@ which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
 # The UCARE package wants a matrix of capture histories rather than the character string
 
 ch.mat.m<- as.data.frame(ch.spawner[ ch.spawner$sex=="m", c(as.character(2008:2020))]) # UCARE does not like tibbles
-overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
+overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m))) 
 
 # look at overall components - refer to Gimenez paper for detail on what test does 
-
+    # test looks at whether CJS model fits data well (does not if have small p)
 
 # Test3sr() Newly encountered individuals have the same chance to be later 
 # reobserved as recaptured (previously encountered) individuals. usually a test for trap dependence
@@ -178,24 +179,26 @@ overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
 
 test3sr(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
 
-# test2ct() Missed individuals have the same chance to be recaptured at the next occasion as 
-# currently captured individuals; usually a test for transients
+# test2ct() Missed individuals have the same chance to be recaptured at the next 
+# occasion as currently captured individuals; usually a test for transients
 
 test2ct(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
 
 
-# test2cl. There is no difference in the timing of reencounters between the individuals encountered and not encountered at occasion i, 
-# con-ditional on presence at both occasions i and i + 2
+# test2cl. There is no difference in the timing of reencounters between the 
+#   individuals encountered and not encountered at occasion i, 
+# conditional on presence at both occasions i and i + 2
 
 test2cl(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
 
 # test3sm. Among those individuals seen again, when they were seen does not differ among 
-# previously and newly marked individuals; this is the null hypothesis of, for example, skip spawning
+# previously and newly marked individuals; this is the null hypothesis of, 
+# for example, skip spawning
 
 test3sm(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))
 
 ##################
-# female spawners - overall test fails because test3sm failes (see below)
+# female spawners - overall test fails because test3sm fails (see below)
 ch.mat.f<- as.data.frame(ch.spawner[ ch.spawner$sex=="f", c(as.character(2008:2020))]) # UCARE does not like tibbles
 #overall_CJS(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
@@ -208,23 +211,25 @@ ch.mat.f<- as.data.frame(ch.spawner[ ch.spawner$sex=="f", c(as.character(2008:20
 
 test3sr(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
-# test2ct() Missed individuals have the same chance to be recaptured at the next occasion as 
-# currently captured individuals; usually a test for transients
+# test2ct() Missed individuals have the same chance to be recaptured at the next 
+#occasion as currently captured individuals; usually a test for transients
 
 test2ct(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
 
-# test2cl. There is no difference in the timing of reencounters between the individuals encountered and not encountered at occasion i, 
+# test2cl. There is no difference in the timing of reencounters between the 
+#  individuals encountered and not encountered at occasion i, 
 # con-ditional on presence at both occasions i and i + 2
 
 test2cl(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
 # test3sm. Among those individuals seen again, when they were seen does not differ among 
-# previously and newly marked individuals; this is the null hypothesis of, for example, skip spawning
-# fails for females because 
+# previously and newly marked individuals; this is the null hypothesis of, 
+# for example, skip spawning fails for females because 
 #test3sm(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
-# fails for females because data is just too sparse with only a hanful of individual seen 3+times.
+# fails for females because data is just too sparse with only a hanful of individual 
+# seen 3+times.
 apply(ch.mat.f, 1, sum)
 marray(ch.mat.f, freq=rep(1, nrow(ch.mat.f)))
 
@@ -283,15 +288,17 @@ pent.zero.cs=list(formula=~1, fixed=list(time=2009:2020,value=0))
 pent.time   =list(formula=~time)   ## CJS
 
 
-# we again create simulator to generate simulated data from this model and fit it using RMark
-## Number of simulations to run. 200 is good enough for GOF
+# we again create simulator to generate simulated data from this model and fit it 
+#using RMark. Number of simulations to run. 200 is good enough for GOF
 N.sim <- 200
 
 ## Intialize the random number generator
 set.seed(23423)
 
 # model 1 appears to be the "best" model
-model.pop=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.dot))
+model.pop=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, 
+                                                                p=p.time, 
+                                                                pent=pent.dot))
 
 # find the deviance statistics but these have no direct interpretation for popan models
 model.pop$results$deviance
@@ -302,12 +309,13 @@ model.pop$results$deviance.df
 
 sample.times<-  model.pop$begin.time + c(0,cumsum(model.pop$time.intervals))
  
-N       <- get.real(model.pop, "N")
-p       <- get.real(model.pop, "p")
-Phi     <- get.real(model.pop, "Phi")
-pent    <- get.real(model.pop, "pent")
+(N       <- get.real(model.pop, "N"))
+(p       <- get.real(model.pop, "p"))
+(Phi     <- get.real(model.pop, "Phi"))
+(pent    <- get.real(model.pop, "pent"))
 
-data.frame(times=sample.times, N=c(N, rep(NA,length(sample.times)-1)), p=as.vector(p), Phi=c(Phi,NA), pent=c(pent,NA))
+data.frame(times=sample.times, N=c(N, rep(NA,length(sample.times)-1)), 
+           p=as.vector(p), Phi=c(Phi,NA), pent=c(pent,NA))
 
 # make any adjustments for unequal sampling times
 ## Compute the gaps between sampling occasions
@@ -329,15 +337,16 @@ sim.popan <- function( sample.times, N, p, Phi, pent){
    # N is the total number of animals every seen in the population
    pop <- matrix(0, nrow=N, ncol=length(sample.times))  # initial members of the population x sample times
    # The number that enter before sample time is multinomial with pent parameters
-   N.new <- rmultinom(1, size=N, prob=c(1-sum(pent),pent))
-   start.row <- 1+cumsum(c(0,N.new))
+   N.new <- rmultinom(1, size=N, prob=c(1-sum(pent),pent)) #KP: simulates total new fish each ocassion
+   # KP: why is the ocassion 1 recruitment prob 1-sum(pent)? Is this just to sum to 1 and doesn't really matter?
+   start.row <- 1+cumsum(c(0,N.new))# KP: I don't totally understand these two, but are total known fish ofset by one occassion
    end.row   <- cumsum(c(N.new))
-   # now generate survival catchability. This needs to be done sequentially
-   pop[start.row[1]:end.row[1],1] <- 1 # initial population present
+   # now generate survival +catchability. This needs to be done sequentially
+   pop[start.row[1]:end.row[1],1] <- 1 # initial population present (KP: takes 225 (N.new) individs and sets first sample time survival = 1)
    for(time in 2:length(sample.times)){
       # survival
-      pop[,time] <- pop[,time-1]*rbinom(nrow(pop),1, Phi[time-1] )
-      pop[start.row[time]:end.row[time],time] <- 1  # when do the animals enter
+      pop[,time] <- pop[,time-1]*rbinom(nrow(pop),1, Phi[time-1] ) # KP this is survival of initial catch of fish at occassion 1 over time (with annual Phi probability)
+      pop[start.row[time]:end.row[time],time] <- 1  # when do the animals enter #KP this is setting the survival of the new animals entering at the occassion (time) = 1. Then the loop applies survival for the next occurrance
     }
    
    # apply the capture probabilities at each sample time to generate the capture history matrix
@@ -345,6 +354,10 @@ sim.popan <- function( sample.times, N, p, Phi, pent){
 
    list(pop=pop, ch=ch)   
 }
+
+## KP: I imagine these elements would have to change based on the fully time dependent model or 
+#  constant?
+
 
 # Here is an example of the simulator in action
 test.pop <- sim.popan( sample.times=sample.times, N=N, p=p, Phi=Phi, pent=pent)
@@ -364,12 +377,14 @@ c(1-sum(pent),pent)
 # compare actual survival (must be alive a time i and time i+1) vs theoretical survival
 colSums(test.pop$pop[,-ncol(test.pop$pop)]*test.pop$pop[,-1])/colSums(test.pop$pop[,-ncol(test.pop$pop)])
 Phi
+#KP: why would you want to have a variable bootstrapped phi/pent to compare to constant phi/pent?
 
 
 ## This fits a Mark model using RMark
 ## caution, if a model does not coverge, the fit$results will be NULL. So  you need to check for this (see below)
 fit.Mark <- function(ch, sample.times=sample.times){
-    fit.proc = process.data(data.frame(ch=ch, freq=1), model= "POPAN", begin.time=2008, time.intervals=diff(sample.times))
+    fit.proc = process.data(data.frame(ch=ch, freq=1), model= "POPAN", begin.time=2008, 
+                            time.intervals=diff(sample.times))
     fit.ddl=make.design.data(fit.proc)
     # make any adjustments to the ddl here as needed,
     #browser()
@@ -393,7 +408,7 @@ head(ch)
 length(ch)
 
 # do one fit
-res<- fit.Mark(ch, sample.times=sample.times)
+res<- fit.Mark(ch, sample.times=sample.times) #KP: what does this warning mean?
 
 # check the estimates
 get.real(res, parameter="p")
@@ -455,7 +470,7 @@ sim.real.est <- plyr::ldply(sim, function(x){
 head(sim.real.est)
 
 # what fraction of simulated deviance exceed our deviance - this is the gof statistic
-gof.p.value <- mean(model.pop$results$deviance< sim.real.est$estimate[sim.real.est$parameter=="deviance"])
+(gof.p.value <- mean(model.pop$results$deviance< sim.real.est$estimate[sim.real.est$parameter=="deviance"]))
 
 ggplot(data=sim.real.est[sim.real.est$parameter=="deviance",], aes(x=estimate))+
   ggtitle("Deviance from simulated POPAN models")+
@@ -465,7 +480,8 @@ ggplot(data=sim.real.est[sim.real.est$parameter=="deviance",], aes(x=estimate))+
               x=-Inf, y=-Inf, hjust=0, vjust=-0.5)
 ######################################################################
 
-# You can do a similar GOF for the pradel model, but if the POPAN model fits, then the PRADEL model will also fit.
+# You can do a similar GOF for the pradel model, but if the POPAN model fits, then 
+# the PRADEL model will also fit.
 
 
 cleanup(ask=FALSE)
