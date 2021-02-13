@@ -144,8 +144,17 @@ headtail(ch.spawnerm)
 ## CJS. Note that RMark gets upset with tibbles
 ch.spawnerm <- as.data.frame(ch.spawnerm)
 
+#GOF global test:
+library(R2ucare)
+ch.mat.m<- as.data.frame(ch.spawner[ ch.spawner$sex=="m", c(as.character(2008:2020))]) # UCARE does not like tibbles
+overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m))) 
+## ** KP Note that there is a big ol long procedure for figuring out what is wrong if this
+#     global test for GOF fails (see MR_Analysis_gof.R) but if it p is decently >0.05, no worries!
+
+
 moberly.proc = process.data(ch.spawnerm, model= "POPAN", begin.time=2008)
 (moberly.ddl=make.design.data(moberly.proc))
+
 
 #list the elements of the ddl dataframe
 mode(moberly.ddl)
@@ -297,13 +306,24 @@ popan.ests <- moberly.JS.mod.avg$estimates
 (p.ests <- model.average(moberly.JS.results, "p")) #, vcv=TRUE
 
 #the support notes for Package 'RMark' provide background on the 'popan.derived' function on p 127
-#it indicates that if a 'marklist' is provided (such as 'moberly.JS.results') the results are model-averaged
+#it indicates that if a 'marklist' is provided (such as 'moberly.JS.results') the results are 
+# model-averaged
 class(moberly.JS.results)
 
 (derived <- popan.derived(moberly.proc, moberly.JS.results, N=TRUE))
 names(derived)
-Nbyocc <- derived$Nbyocc
+(Nbyocc <- derived$Nbyocc)
+Nbyocc.plot <- Nbyocc %>% 
+  mutate(occasion = 2008:2020)
 
+library(ggplot2)
+ggplot(Nbyocc.plot, aes(x=occasion, y=N)) +
+  geom_point() +
+  geom_errorbar(aes(ymin=LCL, ymax=UCL), width=.1) +   
+  #scale_y_continuous(breaks=seq(0.5,1.50, 0.25), limits=c(0.5,1.50)) +
+  scale_x_continuous(breaks=seq(2008, 2020, 1)) +
+  xlab(label = "Year") + ylab(label="N males (95% ci)") +   ## CJS indicate that bars are 95% ci
+  theme_bw()
 
 ######################################################################
 
