@@ -24,7 +24,7 @@ ls()
 
 ##### Construct Capture Histories ####
 nrow(effort.catch %>% 
-  filter(fate %in% "m?")) #there are currently (2021) few fish with a fate of "m?"
+  filter(fate %in% "m?")) #there are currently (as of 2021) few fish with a fate of "m?"
 
 
 catch.history <- effort.catch %>% 
@@ -90,6 +90,23 @@ cols <- names(ch.allsampling)[4:ncol(ch.allsampling)]
 ch.allsampling$ch <- do.call(paste, c(ch.allsampling[cols],sep=""))
 headtail(ch.allsampling)
 
+#### fidelity to shoals #### 
+
+# look at shoal codes for all catches
+xtabs(~yr+shoal, data=catch.history, exclude=NULL, na.action=na.pass)
+# is a single fish captured on more than one shoal in a year? Only a handful of cases...
+
+n.shoals <- catch.history %>% 
+  filter(survey.type %in% "Spawner Sampling/Tagging", 
+         gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
+                          "Seine Net", "Angling")) %>% 
+  dplyr::group_by(LTFishIDAutonumber, yr) %>% 
+  filter(!is.na(LTFishIDAutonumber)) %>% 
+  dplyr::summarize(n.shoals = length(unique(shoal)),shoals = paste(unique(shoal), collapse=""))
+
+
+n.shoals[ n.shoals$n.shoals > 1,] # KP: the fish where multiple shoals were visited in one yr.
+
 
 
 #df and capture histories on spawning shoals only (excluding holding pen):
@@ -98,7 +115,8 @@ catch.hist.spawner <- catch.history %>%
          gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
                           "Seine Net", "Angling")) %>% 
   dplyr::group_by(LTFishIDAutonumber, yr) %>% 
-  dplyr::summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+  dplyr::summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count),
+                   shoal=unique(shoal)[1]) %>%  #takes first shoal within year 
   mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
   arrange(LTFishIDAutonumber, yr) 
 catch.hist.spawner
@@ -106,6 +124,7 @@ catch.hist.spawner
 ## CJS YOu want to remove the 2005, 2006, 2007 data and start with 2008 as the
 ##     number of captures in the first 3 years is very small
 plyr::ddply(catch.hist.spawner, "yr", plyr::summarize, n.fish=length(yr))
+
 catch.hist.spawner <- catch.hist.spawner[ catch.hist.spawner$yr >= 2008,]
 
 
@@ -119,6 +138,83 @@ length(cols) #this is the number of events
 
 #see if any fish in the dataset have no captures since these will not work in MR analysis
 which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
+
+
+ch.spawner       <- catch.hist.spawner %>% 
+  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=tot.catches, values_fill=0, names_sort=TRUE)
+head(ch.spawner)
+ch.spawner.shoal <- catch.hist.spawner %>%  
+  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=shoal,       values_fill="0", names_sort=TRUE)
+head(ch.spawner.shoal)
+
+
+
+cols <- names(ch.spawner)[-(1:2)]
+cols
+
+ch.spawner.shoal[, cols][is.na(ch.spawner.shoal[, cols] )]<- "0"
+head(ch.spawner.shoal)
+
+ch.spawner      $ch       <- do.call(paste, c(ch.spawner      [cols],sep=""))
+ch.spawner.shoal$ch.shoal <- do.call(paste, c(ch.spawner.shoal[cols],sep=""))
+headtail(ch.spawner)
+headtail(ch.spawner.shoal)
+length(cols) #this is the number of events
+
+# first and last capture occassion for each fish
+ch.spawner.shoal$firstCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, Inf, 
+                                      max.col(ch.spawner.shoal[,cols]!="0", ties.method="first"))
+ch.spawner.shoal$lastCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, -Inf, 
+                                     max.col(ch.spawner.shoal[,cols]!="0", ties.method="last"))
+head(as.data.frame(ch.spawner.shoal))
+
+
+#see if any fish in the dataset have no captures since these will not work in MR analysis
+which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
+
+# now look at the pairs of transitions, i.e shoal in year i and shoal in year i+1
+# between the first and last captures. You can't use the data before the first capture
+# because the fish may not have been recruited yet.
+# You can't use the fish after the last capture because the fish may be dead
+trans <- plyr::ldply(1:(nchar(ch.spawner.shoal$ch.shoal[1])-1), function(start){
+  # extract 2 letter transitions starting at start
+  res <-data.frame(id =ch.spawner.shoal$LTFishIDAutonumber,
+                   sex=ch.spawner.shoal$sex,
+                   firstCap=ch.spawner.shoal$firstCap,
+                   lastCap =ch.spawner.shoal$lastCap,
+                   yr = start,
+                   trans=substr(ch.spawner.shoal$ch.shoal,start,start+1))
+  #browser()
+  # check the first and last capture times
+  res <- res[ res$firstCap <= start & res$lastCap >= start+1,] 
+  res
+})
+
+trans$this.year.shoal <- substr(trans$trans,1,1)
+trans$next.year.shoal <- substr(trans$trans,2,2)
+head(trans)
+
+# Look at the transition matrix
+xtabs(~this.year.shoal+next.year.shoal+sex, data=trans, exclude=NULL, na.action=na.pass)
+
+# females is so sparse as to be useless
+# unknown sex is so sparse as to be useless
+trans <- trans[ trans$sex == "m",]
+xtabs(~this.year.shoal + next.year.shoal, data=trans, exclude=NULL, na.action=na.pass)
+prop.table(xtabs(~this.year.shoal + next.year.shoal, data=trans, exclude=NULL, na.action=na.pass), margin=1)
+
+# so, for males, it looks like some fish are sticky to their shoal
+# for example, if are captured on shoal X, then most of the time if come back next year and 
+#are captured you tend to come back to shoal X.
+# Shoal Y and Z seem to be "lumped" together but sample sizes, esp for Z are very small.
+
+
+
+
+
+
+
+
 
 
 
@@ -135,6 +231,16 @@ which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
 ####nocc is the number of capture occasions
 ####begin.time is set to 2008 to indicate the fall period of that year
 #and create the default design data - ddl
+
+
+
+ch.spawner <- catch.hist.spawner %>% 
+  spread(key=yr, value = tot.catches,fill=0) 
+
+cols <- names(ch.spawner)[5:ncol(ch.spawner)]
+ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
+headtail(ch.spawner)
+length(cols) #this is the number of events
 
 #select only male spawners
 ch.spawnerm <- ch.spawner %>% 
