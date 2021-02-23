@@ -15,7 +15,7 @@ library(R2ucare)
 
 
 # make sure Db_connect.R below is saved before proceeding.
-suppressWarnings(source("Db_connect_CS.R"))
+suppressWarnings(source("Db_connect.R"))
 ls()
 
 
@@ -107,11 +107,18 @@ headtail(ch.allsampling)
 # look at shoal codes
 xtabs(~yr+shoal, data=catch.history, exclude=NULL, na.action=na.pass)
 # is a single fish captured on more than one shoal in a year? Only a handful of cases...
-n.shoals <- plyr::ddply(catch.history[ catch.history$survey.type %in% "Spawner Sampling/Tagging",],
-                        c("LTFishIDAutonumber", "yr"), plyr::summarize,
-                        n.shoals = length(unique(shoal)),
-                        shoals   = paste(unique(shoal), collapse=""))
-n.shoals[ n.shoals$n.shoals > 1,]
+
+n.shoals <- catch.history %>% 
+  filter(survey.type %in% "Spawner Sampling/Tagging", 
+         gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
+                          "Seine Net", "Angling")) %>% 
+  dplyr::group_by(LTFishIDAutonumber, yr) %>% 
+  filter(!is.na(LTFishIDAutonumber)) %>% 
+  dplyr::summarize(n.shoals = length(unique(shoal)),shoals = paste(unique(shoal), collapse=""))
+  
+
+n.shoals[ n.shoals$n.shoals > 1,] # KP: the fish where multiple shoals were visited in one yr.
+
 
 
 # find the shoal where it was captured
@@ -120,15 +127,17 @@ catch.hist.spawner <- catch.history %>%
   filter(survey.type %in% "Spawner Sampling/Tagging", 
          gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
                           "Seine Net", "Angling")) %>% 
-  group_by(LTFishIDAutonumber, yr) %>% 
+  dplyr::group_by(LTFishIDAutonumber, yr) %>% 
   dplyr::summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count), 
                              shoal=unique(shoal)[1]) %>%  ## CJS added dplyr::
   mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches),
-         shoal       = shoal) %>% 
+         shoal = shoal) %>% 
   arrange(LTFishIDAutonumber, yr) 
 catch.hist.spawner
+
+
 # notice that in some years, the shoal is missing even if a fish is captured.
-# for example look at fish 108 in 201.
+# for example look at fish 108 in 201. # KP fixed most of these 22-Feb-2021
 
 
 ## CJS YOu want to remove the 2005, 2006, 2007 data and start with 2008 as the
