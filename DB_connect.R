@@ -37,7 +37,7 @@ library(ggplot2)
 ### Connect to Moberly Database ####
 
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy12-Jan-2020.accdb")
+	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
 
 sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
 
