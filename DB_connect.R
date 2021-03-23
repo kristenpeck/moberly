@@ -141,6 +141,28 @@ unique(effortR$survey.type)
   spread(tidy.survey.type, number)
 )
 
+#start and end of SLINs
+SLINs <- effortR %>% 
+  filter(survey.type %in% c("SLIN - Spring Littoral Index Netting")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
+
+#start and end of hydroacoustics
+acoustics <- effortR %>% 
+  filter(survey.type %in% c("Hydroacoustics Calibration")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
+
+#start and end of spawner sampling
+spawns <- effortR %>% 
+  filter(survey.type %in% c("Spawner Sampling/Tagging")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
+
+
 
 
 
