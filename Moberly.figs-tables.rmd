@@ -1,0 +1,24 @@
+---
+title: "Moberly-figures"
+author: "KPeck"
+date: "17/03/2021"
+output:
+  word_document:
+    reference_docx: "Template_doc.docx"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+source("DB_connect.R")
+ls()
+```
+
+
+```{r Tables, echo=F, results='asis'}
+library(knitr)
+options(knitr.kable.NA = "")
+kable(survey.table, caption = "Table 1: Number of nets set by year and survey type. SLIN nets were set according to Spring Littoral Index Netting standards, Spawner Sampling nets were set on spawning shoals during the fall, Targeted Sampling included targeted nets for juveniles throughout the open-water period, and Hydroacoustics nets were used to calibrate hydroacoustic sampling.")
+```
+
+
+

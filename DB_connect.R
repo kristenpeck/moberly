@@ -9,7 +9,6 @@
 ### Author: Kristen Peck, begun Dec-2017
 
 
-
 library(RODBC)
 library(plyr)
 library(dplyr)
@@ -44,8 +43,12 @@ library(ggplot2)
 
 ### Connect to Moberly Database ####
 
+# ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
+# 	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
+	DBQ=C:/Users/kmpec/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
+
+
 
 sqlTables(ch,tableType = "TABLE")["TABLE_NAME"]
 
@@ -61,7 +64,7 @@ odbcCloseAll()
 
 # ACTIONS TO DO: ####
 # - mark whether fish is recap or not in any given year to quickly summarize
-# - print a copy of effort and catch for most recent year to QA data entry
+
 
 
 #### EFFORT ####
@@ -115,6 +118,57 @@ which(is.na(effortR$season))
 # may be a result of two crews working at the same time in spring, 
 # so those are fine, but this should catch double-entered efforts.
 effortR[duplicated(paste(effortR$st.datetime,effortR$end.datetime)),]
+
+
+# ## Check list of surveys: 
+str(effortR)
+effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
+effortR <- effortR[order(effortR$season.yr.survey),]
+
+uniq <- data.frame(table(effortR$season.yr.survey))
+colnames(uniq) <- c("Sampling Event","Number of Efforts")
+uniq$Year <- substr(uniq[,1], 1,4)
+
+uniq
+
+#table of events per year and associated effort
+unique(effortR$survey.type)
+
+(survey.table <- effortR %>% 
+  filter(survey.type %in% c("Spawner Sampling/Tagging",
+                            "SLIN - Spring Littoral Index Netting",
+                            "Non-Random Sampling", "Hydroacoustics Calibration")) %>% 
+  mutate(tidy.survey.type = recode(survey.type, 
+                                   "Spawner Sampling/Tagging" = "Spawner Sampling",
+                                   "SLIN - Spring Littoral Index Netting"= "SLIN",
+                                   "Non-Random Sampling" = "Targeted Sampling",
+                                   "Hydroacoustics Calibration"= "Hydroacoustics")) %>% 
+  group_by(yr, tidy.survey.type) %>% 
+  select(Year=yr, tidy.survey.type) %>% 
+  summarize(number=length(Year)) %>% 
+  spread(tidy.survey.type, number)
+)
+
+#start and end of SLINs
+SLINs <- effortR %>% 
+  filter(survey.type %in% c("SLIN - Spring Littoral Index Netting")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
+
+#start and end of hydroacoustics
+acoustics <- effortR %>% 
+  filter(survey.type %in% c("Hydroacoustics Calibration")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
+
+#start and end of spawner sampling
+spawns <- effortR %>% 
+  filter(survey.type %in% c("Spawner Sampling/Tagging")) %>% 
+  arrange(st.datetime) %>% 
+  group_by(yr) %>% 
+  summarize(start = first(st.datetime), end = last(end.datetime))
 
 
 
@@ -214,7 +268,7 @@ catchR <- catch %>%
 
 str(catchR)  
 
-
+length(unique(catchR$species))
 
 #### bycatch ####
 unique(bycatch$ByCatchSpecies)
@@ -320,18 +374,7 @@ ggplot(catch.all.yrselect)+
 
 
 
-### QA effort ####
-# 
-# ## Check list of surveys: 
-str(effortR)
-effortR$season.yr.survey <- paste(effortR$yr, effortR$season, effortR$survey.type)
-effortR <- effortR[order(effortR$season.yr.survey),]
 
-uniq <- data.frame(table(effortR$season.yr.survey))
-colnames(uniq) <- c("Sampling Event","Number of Efforts")
-uniq$Year <- substr(uniq[,1], 1,4)
-
-uniq
 
 
  
@@ -540,7 +583,8 @@ LT.ID[which(hex1 > 1),c("LTFishIDAutonumber","tags")]
 # #for clean "source" run in other scripts, remove all extra objects:
 # 
 
-rm(list=setdiff(ls(),c("bycatchR", "catch.all", "catchR", "effort.catch", "effortR", "envR", "LT.IDR")))
+rm(list=setdiff(ls(),c("bycatchR", "catch.all", "catchR", "effort.catch", 
+                       "effortR", "envR", "LT.IDR", "survey.table")))
 
 # 
 # 
