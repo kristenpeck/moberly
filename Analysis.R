@@ -133,7 +133,7 @@ str(summary2)
 
 (fig_male_mn_FL_2008to2020 <- ggplot(summary, aes(x=yr, y=meanFL)) +
   geom_point(aes(size=nFL)) +
-  geom_errorbar(width=0.2, aes(ymin=meanFL-seFL,ymax=meanFL+seFL)) +
+  geom_errorbar(width=0.2, aes(ymin=lciFL,ymax=uciFL)) +
   labs(x="Year", y="Fork Length (mm)", size="# LT \nsampled")+
   scale_y_continuous(breaks=seq(400,900,50))+
   scale_x_continuous(breaks=seq(2005,yr.select,1))+
@@ -142,7 +142,7 @@ str(summary2)
 ggsave(plot = fig_male_mn_FL_2008to2020, "0Male_mean_fork_length_2008-2020.png", h=4, w=7)
 
 
-
+summary$meanFL
 
 ############################################### ***NOT UPDATED
 #### Summarize - FL - FALL SPAWNER females ####
@@ -306,9 +306,9 @@ str(effort.catch)
 
 headtail(tmp  <- effort.catch %>% 
            filterD(EffortAutoNumber,
-                   survey.type=="Spawner Sampling"|survey.type=="Spawner Sampling/Tagging",
-                   species=="LT",
-                   sex=="m") %>%
+                   survey.type %in% "Spawner Sampling/Tagging",
+                   species %in% "LT",
+                   sex %in% "m") %>%
            mutate(fyr=as.factor(yr),
                   age=age2,
                   species=as.character(species))) #use filter to analyze different years, sizes, lakes, etc
@@ -322,6 +322,69 @@ headtail(summary <- tmp %>% group_by(yr) %>%
                   uciAge=round(meanAge+qt(1-(0.05/2),nAge-1)*seAge,2)) %>% 
            as.data.frame())
 summary2 <- summary %>% filterD(yr>=2008)
+
+### Find age at maturity ####
+
+str(effort.catch)
+(spawner.age.LT <- effort.catch %>% 
+  filter(survey.type %in% "Spawner Sampling/Tagging", species %in% "LT", !is.na(FL),
+         sex %in% c("f","m")) %>% 
+  group_by(sex) %>% 
+  summarize(mean.FL = mean(FL), min(FL), max(FL), FLQ1=quantile(FL)[1],FLQ2=quantile(FL)[2],
+            ageQ1=quantile(na.omit(ageatyr.select))[1],ageQ2=quantile(na.omit(ageatyr.select))[2])
+)
+
+(spawner.age.m.LT <- effort.catch %>% 
+    filter(survey.type %in% "Spawner Sampling/Tagging", species %in% "LT", !is.na(FL),
+           sex %in% c("m")) %>% 
+    group_by(sex) %>% 
+    summarize(mean.FL = mean(FL), min(FL), max(FL), FLQ1=quantile(FL)[1],FLQ2=quantile(FL)[2],
+              ageQ1=quantile(na.omit(ageatyr.select))[1],ageQ2=quantile(na.omit(ageatyr.select))[2],
+              N = length(na.omit(ageatyr.select)))
+)
+
+(spawner.age.m.LT <- effort.catch %>% 
+    filter(survey.type %in% "Spawner Sampling/Tagging", species %in% "LT", !is.na(FL),
+           sex %in% c("m"), !is.na(maturity)) 
+)
+
+#make histogram of maturity code and FL, age
+
+ggplot(spawner.age.m.LT)+
+  geom_histogram(aes(x=FL, fill=maturity))
+
+ggplot(spawner.age.m.LT)+
+  geom_histogram(aes(x=ageatyr.select, fill=maturity))+
+  scale_x_continuous(breaks = seq(5,30,2))+
+  labs(title = "Spawning Males")
+
+ ## females now
+(spawner.age.f.LT <- effort.catch %>% 
+    filter(survey.type %in% "Spawner Sampling/Tagging", species %in% "LT", !is.na(FL),
+           sex %in% c("f"), !is.na(maturity)) 
+)
+
+#make histogram of maturity code and FL, age
+
+ggplot(spawner.age.f.LT)+
+  geom_histogram(aes(x=FL, fill=maturity))
+
+ggplot(spawner.age.f.LT)+
+  geom_histogram(aes(x=ageatyr.select, fill=maturity))+
+  scale_x_continuous(breaks = seq(5,35,2))+
+  labs(title = "Spawning Females")
+ 
+## Both
+(spawner.age.mf.LT <- effort.catch %>% 
+    filter(survey.type %in% "Spawner Sampling/Tagging", species %in% "LT", !is.na(FL),
+           !is.na(maturity), sex %in% c("m","f")) 
+)
+
+ggplot(spawner.age.mf.LT)+
+  geom_histogram(aes(x=ageatyr.select, fill=sex),binwidth = 1,col="black")+
+  scale_x_continuous(breaks = seq(5,35,2))+
+  labs(title = "Spawning LT", x = "Age at capture")+
+  theme_bw()
 
 ###############################################
 # ANOVA male LT Age fall mark-recap survey ####
