@@ -17,6 +17,14 @@ library(lubridate)
 library(tidyr)
 library(ggplot2)
 
+# RStudio.Version()
+# citation()
+# citation("RODBC")
+# citation("plyr")
+# citation("dplyr")
+# citation("lubridate")
+# citation("tidyr")
+# citation("ggplot2")
 
 #Open "channel" to database to extract data tables. Close connection when done #
 # Troubleshooting Issues:
@@ -265,7 +273,7 @@ yr.select <- 2020
   select(field.ID, field.IDnum, gear.type, mesh,shoal,UTME, UTMN, bottom.depth3, st.datetime, 
          end.datetime, temp) %>% 
   arrange(field.IDnum))
-#survey.type %in% "Spawner Sampling/Tagging"
+
 
 
 
@@ -280,7 +288,7 @@ yr.select <- 2020
 #how many individual fish were caught on shoals in a given year?
 str(catch.all)
 
-yr.select <- 2019
+yr.select <- 2020
 
 (catch.all.yrselect <- catch.all %>% 
   filter(yr %in% yr.select) %>% 
@@ -298,7 +306,11 @@ nrow(catch.all.yrselect %>%
 
 ggplot(catch.all.yrselect)+
   geom_histogram(aes(x=FL,fill=sex), binwidth=20, col="black")+
-  ggtitle(label=paste(yr.select, "spawner FL"))
+  ggtitle(label=paste(yr.select, "spawner FL"))+
+  scale_x_continuous(breaks=(seq(min(na.omit(catch.all.yrselect$FL)), 
+                                 max(na.omit(catch.all.yrselect$FL)),50)))+
+  scale_y_continuous(minor_breaks = F)+
+  theme_bw()
 
 
 
