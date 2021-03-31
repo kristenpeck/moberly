@@ -11,6 +11,8 @@ library(RMark)
 library(tidyverse)
 library(RODBC)
 
+# citation("FSA")
+# citation("RMark")
 
 ###
 #### Run Moberly LT Database script ####
@@ -90,10 +92,13 @@ cols <- names(ch.allsampling)[4:ncol(ch.allsampling)]
 ch.allsampling$ch <- do.call(paste, c(ch.allsampling[cols],sep=""))
 headtail(ch.allsampling)
 
-#### fidelity to shoals #### 
 
-# look at shoal codes for all catches
-xtabs(~yr+shoal, data=catch.history, exclude=NULL, na.action=na.pass)
+
+
+
+#### Fidelity to shoals #### 
+
+
 # is a single fish captured on more than one shoal in a year? Only a handful of cases...
 
 n.shoals <- catch.history %>% 
@@ -105,7 +110,9 @@ n.shoals <- catch.history %>%
   dplyr::summarize(n.shoals = length(unique(shoal)),shoals = paste(unique(shoal), collapse=""))
 
 
-n.shoals[ n.shoals$n.shoals > 1,] # KP: the fish where multiple shoals were visited in one yr.
+
+# The fish where multiple shoals were visited in one yr.
+n.shoals[ n.shoals$n.shoals > 1,] 
 
 
 
@@ -121,6 +128,11 @@ catch.hist.spawner <- catch.history %>%
   arrange(LTFishIDAutonumber, yr) 
 catch.hist.spawner
 
+
+# Totals caught at shoals each year
+xtabs(~yr+shoal, data=catch.hist.spawner, exclude=NULL, na.action=na.pass)
+
+
 ## CJS YOu want to remove the 2005, 2006, 2007 data and start with 2008 as the
 ##     number of captures in the first 3 years is very small
 plyr::ddply(catch.hist.spawner, "yr", plyr::summarize, n.fish=length(yr))
@@ -131,20 +143,22 @@ catch.hist.spawner <- catch.hist.spawner[ catch.hist.spawner$yr >= 2008,]
 ch.spawner <- catch.hist.spawner %>% 
   spread(key=yr, value = tot.catches,fill=0) 
 
-cols <- names(ch.spawner)[4:ncol(ch.spawner)]
+cols <- names(ch.spawner)[5:ncol(ch.spawner)]
 ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
 headtail(ch.spawner)
 length(cols) #this is the number of events
 
 #see if any fish in the dataset have no captures since these will not work in MR analysis
-which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
+which(ch.spawner$ch == paste(rep(0,length(5:ncol(ch.spawner))-1),collapse =""))
 
 
 ch.spawner       <- catch.hist.spawner %>% 
-  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=tot.catches, values_fill=0, names_sort=TRUE)
+  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=tot.catches, 
+              values_fill=0, names_sort=TRUE)
 head(ch.spawner)
 ch.spawner.shoal <- catch.hist.spawner %>%  
-  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=shoal,       values_fill="0", names_sort=TRUE)
+  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=shoal,       
+              values_fill="0", names_sort=TRUE)
 head(ch.spawner.shoal)
 
 
@@ -161,6 +175,7 @@ headtail(ch.spawner)
 headtail(ch.spawner.shoal)
 length(cols) #this is the number of events
 
+
 # first and last capture occassion for each fish
 ch.spawner.shoal$firstCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, Inf, 
                                       max.col(ch.spawner.shoal[,cols]!="0", ties.method="first"))
@@ -168,9 +183,6 @@ ch.spawner.shoal$lastCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, -In
                                      max.col(ch.spawner.shoal[,cols]!="0", ties.method="last"))
 head(as.data.frame(ch.spawner.shoal))
 
-
-#see if any fish in the dataset have no captures since these will not work in MR analysis
-which(ch.spawner$ch == paste(rep(0,length(4:ncol(ch.spawner))-1),collapse =""))
 
 # now look at the pairs of transitions, i.e shoal in year i and shoal in year i+1
 # between the first and last captures. You can't use the data before the first capture
@@ -189,6 +201,9 @@ trans <- plyr::ldply(1:(nchar(ch.spawner.shoal$ch.shoal[1])-1), function(start){
   res <- res[ res$firstCap <= start & res$lastCap >= start+1,] 
   res
 })
+
+#KP - but doesn't the above take the first year (2008) capture status no matter if the fish has been 
+# recruited or not?
 
 trans$this.year.shoal <- substr(trans$trans,1,1)
 trans$next.year.shoal <- substr(trans$trans,2,2)
@@ -250,7 +265,7 @@ headtail(ch.spawnerm)
 ## CJS. Note that RMark gets upset with tibbles
 ch.spawnerm <- as.data.frame(ch.spawnerm)
 
-#GOF global test:
+####GOF global test ####
 library(R2ucare)
 ch.mat.m<- as.data.frame(ch.spawner[ ch.spawner$sex=="m", c(as.character(2008:2020))]) # UCARE does not like tibbles
 overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m))) 
@@ -393,7 +408,7 @@ model.5$results$real
 
 
 
-############################################################
+### POPAN model averaging ####
 #now average the results of the models using the AIC weighting
 (moberly.JS.mod.avg=model.average(moberly.JS.results,vcv=TRUE))
 names(moberly.JS.mod.avg)
@@ -431,9 +446,11 @@ ggplot(Nbyocc.plot, aes(x=occasion, y=N)) +
   xlab(label = "Year") + ylab(label="N males (95% ci)") +   ## CJS indicate that bars are 95% ci
   theme_bw()
 
-######################################################################
 
-#### Mark-recap Analysis Pradel ####
+
+
+
+#### Mark-recap Analysis- Pradel ####
 
 ## CJS. The Pradel models are just a different parameterization of the JS model
 ##      THe key advantage is the ability to get lambda (population) growth directly
@@ -522,187 +539,40 @@ ggplot(lambda.ests, aes(x=plot.time, y=estimate)) +
 
 
 
-# #OLD SCRIPT#### POPAN Parameters ####
-# #to set up the possible parameters for later selection/inclusion within models
-# Phi.dot=list(formula=~1)  #constant survival
-# Phi.Time=list(formula=~Time)  #survival varying by time as a trend
-# 
-# p.dot=list(formula=~1) # capture probability constant
-# p.time=list(formula=~time)  #capture probability varies with event
-# p.time.cs=list(formula=~time,fixed=list(time=2008,value=1))  #capture probability varies with event, initial p value set to 1 as it cannot be estimated... based on advise from Carl Schwarz
-# 
-# #pent.time=list(formula=~time)  #probability of entrance from the superpopulation varies with event... variable recruitment
-# pent.dot=list(formula=~1)    #probability of entrance from the superpopulation is constant...not considered as this requires that initial population size be equivalent to annual immigration thereafter 
-# pent.Time=list(formula=~Time)    #probability of entrance from the superpopulation varies with time as a Trend
-# pent.zero=list(formula=~1, fixed=~0)  #sets probablity of entrance to zero (zero recruitment)... added this in 2015 but still need to run it
-# 
-# #run models with selected parameters of interest from above for S (=Phi), p and pent
-# #first six models represent the possible combinations of S and pent, with p varying by event
-# #difficulty pointed out with beta parameters by CS, seems to be an issue of confounding in first p, in fully time-varying models
-# 
-# #CS points out that in popan models with p(t), teh first p is NEVER estimable... so consider including his fix i all models even though it only seems to create problematic outputs in models 2 and 5   
-# 
-# #### POPAN models ####
-# #not clear how to sort this out and CS's recommended fix doesn't seem to do it... 
-# #the red notes in output indicating "Note: only xx parametes counted of xx specified" seem to corresponed to the instances of problematic  beta parameter outputs 
-# #ultimately, I have elected to only include models that are not fully time dependant (i.e. Phi and pent are either constant or varying as a trend, but not ~time) 
-# #model.1=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.dot))
-# #model.2=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.Time))
-# #model.3=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.zero))
-# 
-# model.1=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.dot))
-# model.2=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.Time))
-# model.3=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.zero))
-# model.4=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, pent=pent.dot))
-# model.5=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, pent=pent.Time))
-# model.6=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, pent=pent.zero))
-# 
-# #model.71cs=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time.cs, pent=pent.time))
-# 
-# #model.81a=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=list(formula=~time,fixed=list(time=2008,value=1) ), pent=pent.time))
-# #rm(model.1,model.2,model.3,model.4,model.5,model.6,model.71cs,model.81a)
-# 
-# #models with parameter warnings in red are #71cs and 81a
-# #red warning occurs in these models with or without carls modification, but results look fine when including carls modification
-# 
-# #### POPAN model evaluation ####
-# #collect the results of all the models and compare
-# #smallest AIC value is most parsimonious
-# #rule of thumb is that a 'delta AIC' of <2 suggests substantial evidence for a model, while delta AICs values of 3-7 indicate considerably less support, >10 indicates that teh model is very unlikely
-# (moberly.JS.results=collect.models(type="POPAN"))
-# 
-# rm(model.1,model.3,model.4,model.6)
-# 
-# # top two models averaged
-# (moberly.JS.results=collect.models(type="POPAN"))
-# 
-# #note that 'moberly.JS.results' has a particular structure which is of teh class 'marklist'
-# #a marklist contains a list element for each model that was run
-# mode(moberly.JS.results)
-# class(moberly.JS.results)
-# names(moberly.JS.results)
-# 
-# #### POPAN results ####
-# #to see the real results with confidence limits for any model
-# model.1$results$real      # or could use... summary(moberly.JS.results[[2]])
-# model.2$results$real
-# model.3$results$real
-# #model.4$results$real
-# #model.5$results$real
-# #model.6$results$real
-# 
-# #model.7$results$real  #this is model 2 but without cs addtion, seems to produce confounded results
-# #model.8$results$real  #this is model 5 but without cs addtion,seems to produce confounded results
-# #model.9$results$real  #this is model 4 but with cs addtion, model 4 was ok and this model has less AIC weight... no improvement 
-# 
-# 
-# ############################################################
-# #now average the results of the models using the AIC weighting
-# (moberly.JS.mod.avg=model.average(moberly.JS.results,vcv=TRUE))
-# names(moberly.JS.mod.avg)
-# popan.ests <- moberly.JS.mod.avg$estimates
-# 
-# (Phi.ests <- model.average(moberly.JS.results, "Phi")) #, vcv=TRUE
-# (pent.ests <- model.average(moberly.JS.results, "pent")) #, vcv=TRUE
-# (p.ests <- model.average(moberly.JS.results, "p")) #, vcv=TRUE
-# 
-# #the support notes for Package 'RMark' provide background on the 'popan.derived' function on p 127
-# #it indicates that if a 'marklist' is provided (such as 'moberly.JS.results') the results are model-averaged
-# class(moberly.JS.results)
-# 
-# (derived <- popan.derived(moberly.proc, moberly.JS.results, N=TRUE))
-# names(derived)
-# Nbyocc <- derived$Nbyocc
-# 
-# 
-# ######################################################################
-# 
-# #### Mark-recap Analysis Pradel ####
-# 
-# #establish the process.data for analysis
-# ####time intervals are fractions of a year between capture events, and includes the length of time elapsed since the last capture event -- must be updated to current time
-# ####nocc is the number of capture occasions
-# ####begin.time is set to 2008 to indicate the fall period of that year
-# #and create the default design data - ddl
-# 
-# moberly.proc = process.data(ch.sum, model= "Pradlambda", begin.time=2008, nocc=10, time.intervals=c(1,1,1,1,1,1,1,1,1,1))
-# moberly.ddl=make.design.data(moberly.proc)
-# 
-# 
-# #list the elements of the ddl dataframe
-# mode(moberly.ddl)
-# names(moberly.ddl)
-# 
-# #### Pradel Parameters ####
-# 
-# #to set up the possible parameters for later selection/inclusion within models
-# Phi.dot=list(formula=~1)  #constant survival
-# Phi.Time=list(formula=~Time)  #survival varying by time as a trend
-# 
-# p.time=list(formula=~time)  #capture probability varies with event
-# #p.time.cs=list(formula=~time,fixed=list(time=2005,value=1))  #capture probability varies with event, initial p value set to 1 as it cannot be estimated... based on advise from Carl Schwarz
-# 
-# lambda.dot=list(formula=~1)    #population growth rate is constant 
-# lambda.Time=list(formula=~Time)    #populations growth rate varies as a trend with time
-# 
-# 
-# #### Pradel models ####
-# #run models with selected parameters of interest from above for S (=Phi), p and lambda
-# #seems to be no confounding of parameters
-# 
-# model.1=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, Lambda=lambda.dot))
-# model.2=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, Lambda=lambda.Time))
-# model.3=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, Lambda=lambda.dot))
-# model.4=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, Lambda=lambda.Time))
-# 
-# 
-# #collect the results of all the models and compare
-# #smallest AIC value is most parsimonious
-# #rule of thumb is that a 'delta AIC' of <2 suggests substantial evidence for a model, while delta AICs values of 3-7 indicate considerably less support, >10 indicates that teh model is very unlikely
-# moberly.pradel.results=collect.models(type="Pradlambda")
-# moberly.pradel.results # model.2 and model.4 supported need to average below and remove other two models
-# 
-# #note that 'moberly.pradel.results' has a particular structure which is of the class 'marklist'
-# #a marklist contains a list element for each model that was run
-# mode(moberly.pradel.results)
-# class(moberly.pradel.results)
-# names(moberly.pradel.results)
-# 
-# ##
-# #to see the real results with confidence limits for any model
-# model.1$results$real      # or could use... summary(moberly.pradel.results[[2]])
-# model.2$results$real
-# model.3$results$real
-# model.4$results$real
-# 
-# rm(model.1,model.3) # removed model.1 and model.3 because they were >2 AIC scores compared to the top model
-# 
-# ##
-# #### Pradel model evaluation ####
-# #now average the results of the models using the AIC weighting
-# (moberly.pradel.mod.avg=model.average(moberly.pradel.results,vcv=TRUE))
-# names(moberly.pradel.mod.avg)
-# pradel.ests <- moberly.pradel.mod.avg$estimates
-# 
-# #### Pradel model results ####
-# #the support notes for Package 'RMark' provide background on the 'popan.derived' function on p 127
-# #it indicates that if a 'marklist' is provided (such as 'moberly.JS.results') the results are model-averaged
-# #look at one parameter at a time
-# 
-# (Phi.ests <- model.average(moberly.pradel.results, "Phi")) #, vcv=TRUE
-# (p.ests <- model.average(moberly.pradel.results, "p")) #, vcv=TRUE
-# (lambda.ests <- model.average(moberly.pradel.results, "Lambda")) #, vcv=TRUE
-# 
-# # for plotting
-# lambda.ests <- cbind(lambda.ests, moberly.pradel.mod.avg$estimates[22:31,4:5])
-# 
-# library(ggplot2)
-# ggplot(lambda.ests, aes(x=time, y=estimate)) +
-#   geom_point() +
-#   geom_errorbar(aes(ymin=lcl, ymax=ucl)) +
-#   scale_y_continuous(breaks=seq(0.5,1.75, 0.25), limits=c(0.5,1.75)) +
-#   xlab(label = "Year") + ylab(label="Lambda estimate") +
-#   geom_hline(yintercept=1, linetype="dashed" ) +
-#   theme_classic()
-# 
-# ######################################################################
+#### Barker Analysis - in DEVT ####
+
+(catch.hist.byseasonyr08 <- catch.history %>%  
+   filter(season %in% c("spring", "summer", "fall"), yr %in% c(2008:2016)) %>% 
+   mutate(season.num = case_when(season %in% "spring" ~ "1spring",
+                                 season %in% "summer" ~ "2summer",
+                                 season %in% "fall" ~ "3fall")) %>% 
+   mutate(season.yr = factor(paste0(yr,"-",season.num), ordered=T)) %>% 
+   group_by(LTFishIDAutonumber, season.yr) %>% 
+   dplyr::summarise(sex=unique(sex), freq=last(freq), tot.catches = sum(count)) %>% 
+   mutate(tot.catches = ifelse(tot.catches >1, 1, tot.catches)) %>% 
+   arrange(LTFishIDAutonumber)) 
+
+
+#capture histories from all seasons, all recap types:
+(ch.allsampling <- spread(data=catch.hist.byseasonyr08, key=season.yr, value = tot.catches,
+                          fill=0))
+
+cols <- names(ch.allsampling)[4:ncol(ch.allsampling)]
+ch.allsampling$ch <- do.call(paste, c(ch.allsampling[cols],sep=""))
+headtail(ch.allsampling)
+
+
+ch.allsampling %>% 
+  filter(LTFishIDAutonumber %in% c(451,498,572)) %>% 
+  as.data.frame()
+
+
+
+
+#### RMark Clean-up ####
+
+cleanup(ask=FALSE)
+
+
+
+
