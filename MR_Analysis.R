@@ -44,7 +44,7 @@ headtail(catch.history)
 #   Likely can't do much with them for MR...
 
 
-  #optional: can export this df if sending to someone, and can reload from here:
+  #optional: can export this df if sending to someone, and they can reload from here bu uncommenting:
   # write.csv(catch.history, "catch.history.csv") 
   # catch.history <- read.csv("catch.history.csv", row.names = NULL)
 
@@ -99,16 +99,15 @@ headtail(ch.allsampling)
 #### Fidelity to shoals #### 
 
 
-# is a single fish captured on more than one shoal in a year? Only a handful of cases...
+# is a single fish captured on more than one shoal in a year? Only 8 cases as of 2021...
 
 n.shoals <- catch.history %>% 
   filter(survey.type %in% "Spawner Sampling/Tagging", 
          gear.type %in% c("SLIN - Spring Littoral Index Netting Gillnet",
                           "Seine Net", "Angling")) %>% 
-  dplyr::group_by(LTFishIDAutonumber, yr) %>% 
+  dplyr::group_by(LTFishIDAutonumber, yr,sex) %>% 
   filter(!is.na(LTFishIDAutonumber)) %>% 
   dplyr::summarize(n.shoals = length(unique(shoal)),shoals = paste(unique(shoal), collapse=""))
-
 
 
 # The fish where multiple shoals were visited in one yr.
@@ -133,14 +132,14 @@ catch.hist.spawner
 xtabs(~yr+shoal, data=catch.hist.spawner, exclude=NULL, na.action=na.pass)
 
 
-## CJS YOu want to remove the 2005, 2006, 2007 data and start with 2008 as the
+## CJS You want to remove the 2005, 2006, 2007 data and start with 2008 as the
 ##     number of captures in the first 3 years is very small
 plyr::ddply(catch.hist.spawner, "yr", plyr::summarize, n.fish=length(yr))
 
 catch.hist.spawner <- catch.hist.spawner[ catch.hist.spawner$yr >= 2008,]
 
-
-ch.spawner <- catch.hist.spawner %>% 
+#construct catch histories
+ch.spawner <- catch.hist.spawner %>%  #658 x 18
   spread(key=yr, value = tot.catches,fill=0) 
 
 cols <- names(ch.spawner)[5:ncol(ch.spawner)]
@@ -148,24 +147,27 @@ ch.spawner$ch <- do.call(paste, c(ch.spawner[cols],sep=""))
 headtail(ch.spawner)
 length(cols) #this is the number of events
 
-#see if any fish in the dataset have no captures since these will not work in MR analysis
+#QA-see if any fish in the dataset have no captures since these will not work in MR analysis
 which(ch.spawner$ch == paste(rep(0,length(5:ncol(ch.spawner))-1),collapse =""))
 
-
-ch.spawner       <- catch.hist.spawner %>% 
+#same thing, newer script #scratch that-seems there are a different number of rows? 492x16 to investigate
+ch.spawner       <- catch.hist.spawner %>%  
   pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=tot.catches, 
               values_fill=0, names_sort=TRUE)
 head(ch.spawner)
-ch.spawner.shoal <- catch.hist.spawner %>%  
-  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=shoal,       
-              values_fill="0", names_sort=TRUE)
-head(ch.spawner.shoal)
-
-
 
 cols <- names(ch.spawner)[-(1:2)]
 cols
 
+# check assumption of free movement between shoals:
+
+#catch history for which shoal the fish were on
+ch.spawner.shoal <- catch.hist.spawner %>%  
+  pivot_wider(id_cols=c("LTFishIDAutonumber","sex"), names_from=yr, values_from=shoal,       
+              values_fill="0", names_sort=TRUE)
+head(ch.spawner.shoal) 
+
+#go back and fill in shoals from 2015 prior in db
 ch.spawner.shoal[, cols][is.na(ch.spawner.shoal[, cols] )]<- "0"
 head(ch.spawner.shoal)
 
@@ -176,7 +178,7 @@ headtail(ch.spawner.shoal)
 length(cols) #this is the number of events
 
 
-# first and last capture occassion for each fish
+# first and last capture occasion for each fish
 ch.spawner.shoal$firstCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, Inf, 
                                       max.col(ch.spawner.shoal[,cols]!="0", ties.method="first"))
 ch.spawner.shoal$lastCap <-   ifelse(rowSums(ch.spawner.shoal[,cols]!=0)==0, -Inf, 
@@ -188,6 +190,7 @@ head(as.data.frame(ch.spawner.shoal))
 # between the first and last captures. You can't use the data before the first capture
 # because the fish may not have been recruited yet.
 # You can't use the fish after the last capture because the fish may be dead
+#*** KP: currently not working properly-to fix
 trans <- plyr::ldply(1:(nchar(ch.spawner.shoal$ch.shoal[1])-1), function(start){
   # extract 2 letter transitions starting at start
   res <-data.frame(id =ch.spawner.shoal$LTFishIDAutonumber,
@@ -267,11 +270,12 @@ ch.spawnerm <- as.data.frame(ch.spawnerm)
 
 ####GOF global test ####
 library(R2ucare)
-ch.mat.m<- as.data.frame(ch.spawner[ ch.spawner$sex=="m", c(as.character(2008:2020))]) # UCARE does not like tibbles
-overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m))) 
+ch.mat.m<- as.data.frame(ch.spawner[ ch.spawner$sex=="m", c(as.character(2008:2021))]) # UCARE does not like tibbles
+overall_CJS(ch.mat.m, freq=rep(1, nrow(ch.mat.m)))  #isn't freq mortality? pull from data?
 ## ** KP Note that there is a big ol long procedure for figuring out what is wrong if this
 #     global test for GOF fails (see MR_Analysis_gof.R) but if it p is decently >0.05, no worries!
-
+# seems like as of 2021 this test fails pretty hard... I didn't think it did last year so 
+# need to investigate this.
 
 moberly.proc = process.data(ch.spawnerm, model= "POPAN", begin.time=2008)
 (moberly.ddl=make.design.data(moberly.proc))
@@ -306,7 +310,7 @@ pent.dot=list(formula=~1)    #probability of entrance from the superpopulation i
 ## CJS   I assume here you want a zero recruitment model. This formula doesn't work (look at estimates when the model is fit)
 pent.zero   =list(formula=~1, fixed=~0)  #sets probablity of entrance to zero (zero recruitment)... added this in 2015 but still need to run it
 ## CJS   Note that pents are index for the END of the interval, i.e the pent for 2009 is the pent between 2008 and 2009 (sigh!).
-pent.zero.cs=list(formula=~1, fixed=list(time=2009:2020,value=0)) 
+pent.zero.cs=list(formula=~1, fixed=list(time=2009:2021,value=0)) 
 pent.time   =list(formula=~time)   ## CJS
 
 #run models with selected parameters of interest from above for S (=Phi), p and pent
@@ -320,7 +324,7 @@ pent.time   =list(formula=~time)   ## CJS
 model.1=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.dot))
 
 ## CJS check total number of captures by year
-colSums(ch.spawnerm[, as.character(2008:2020)])
+colSums(ch.spawnerm[, as.character(2008:2021)])
 
 
 ## CJS It often helps to use the initial values from a simpler model when fitting a slightly more complex model
@@ -342,7 +346,7 @@ rm(model.3.old)
 model.3    =mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.dot, p=p.time, pent=pent.zero.cs))
 model.3$results$real
 
-
+#model4: survival as linear time trend, encounter prob varies by yr, recruitment constant
 model.4=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, pent=pent.dot))
 
 #model.5=mark(moberly.proc, moberly.ddl, model.parameters=list(Phi=Phi.Time, p=p.time, pent=pent.Time)) ## CJS pent.Time doesn't make sense
@@ -435,14 +439,14 @@ class(moberly.JS.results)
 names(derived)
 (Nbyocc <- derived$Nbyocc)
 Nbyocc.plot <- Nbyocc %>% 
-  mutate(occasion = 2008:2020)
+  mutate(occasion = 2008:2021)
 
 library(ggplot2)
 ggplot(Nbyocc.plot, aes(x=occasion, y=N)) +
   geom_point() +
   geom_errorbar(aes(ymin=LCL, ymax=UCL), width=.1) +   
   #scale_y_continuous(breaks=seq(0.5,1.50, 0.25), limits=c(0.5,1.50)) +
-  scale_x_continuous(breaks=seq(2008, 2020, 1)) +
+  scale_x_continuous(breaks=seq(2008, 2021, 1)) +
   xlab(label = "Year") + ylab(label="N males (95% ci)") +   ## CJS indicate that bars are 95% ci
   theme_bw()
 
@@ -526,7 +530,7 @@ ggplot(lambda.ests, aes(x=plot.time, y=estimate)) +
   geom_point() +
   geom_errorbar(aes(ymin=lcl, ymax=ucl), width=.1) +   ## CJS I like narrower error bars
   scale_y_continuous(breaks=seq(0.5,1.50, 0.25), limits=c(0.5,1.50)) +
-  scale_x_continuous(breaks=seq(2008, 2020, 1)) +
+  scale_x_continuous(breaks=seq(2008, 2021, 1)) +
   xlab(label = "Year") + ylab(label="Lambda estimate (95% ci)") +   ## CJS indicate that bars are 95% ci
   geom_hline(yintercept=1, linetype="dashed" ) +
   theme_classic()

@@ -46,7 +46,7 @@ library(ggplot2)
 # ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
 # 	DBQ=C:/Users/krispeck/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
 ch <- odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};
-	DBQ=C:/Users/kmpec/Documents/R/moberly/Moberly Fish Database-copy22-Feb-2021.accdb")
+	DBQ=C:/Users/kmpec/Documents/R/moberly/Moberly Fish Database-copydec62021.accdb")
 
 
 
@@ -131,6 +131,9 @@ uniq$Year <- substr(uniq[,1], 1,4)
 
 uniq
 
+effortR %>% 
+  filter(survey.type %in% "SLIN - Spring Littoral Index Netting", yr %in% 2021)
+
 #table of events per year and associated effort
 unique(effortR$survey.type)
 
@@ -143,11 +146,11 @@ unique(effortR$survey.type)
                                    "SLIN - Spring Littoral Index Netting"= "SLIN",
                                    "Non-Random Sampling" = "Targeted Sampling",
                                    "Hydroacoustics Calibration"= "Hydroacoustics")) %>% 
-  group_by(yr, tidy.survey.type) %>% 
-  select(Year=yr, tidy.survey.type) %>% 
-  summarize(number=length(Year)) %>% 
-  spread(tidy.survey.type, number)
+  dplyr::group_by(yr, tidy.survey.type) %>% 
+  dplyr::summarize(number=length(yr)) %>% 
+  pivot_wider(names_from=tidy.survey.type, values_from=number)
 )
+
 
 #start and end of SLINs
 SLINs <- effortR %>% 
@@ -170,7 +173,9 @@ spawns <- effortR %>%
   group_by(yr) %>% 
   summarize(start = first(st.datetime), end = last(end.datetime))
 
-
+effortR %>% 
+  filter(yr %in% 2021) %>% 
+  arrange(field.ID)
 
 
 
@@ -220,7 +225,7 @@ effortR %>%
 #gets sex and age from LT.ID table to add to general catch table and clean up catch table
 # need to select the year of interest (e.g. most recent sampling year) to calculate ages to that date
 
-yr.select <- 2020
+yr.select <- 2021
 
 
 
@@ -268,6 +273,7 @@ catchR <- catch %>%
 
 str(catchR)  
 
+#how many species in database?
 length(unique(catchR$species))
 
 #### bycatch ####
@@ -319,7 +325,7 @@ effort.catch <- effortR %>%
 
 #print out effort and catch sheet for select year for visual comparison to datasheets
 
-yr.select <- 2020
+yr.select <- 2021
 
 (effort.QA <- effortR %>% 
   filter(yr %in% yr.select, season %in% "fall") %>% 
@@ -342,12 +348,13 @@ yr.select <- 2020
 #how many individual fish were caught on shoals in a given year?
 str(catch.all)
 
-yr.select <- 2020
+yr.select <- 2021
 
 (catch.all.yrselect <- catch.all %>% 
   filter(yr %in% yr.select) %>% 
   filter(species %in% "LT"))
 
+table(catch.all.yrselect$LTFishIDAutonumber)
 (LTcaught.yrselect <- length(unique(catch.all.yrselect$LTFishIDAutonumber)))
 
 
@@ -409,7 +416,7 @@ nrow(homelessLT <- homelessfish %>%
   filter(FishSpecies %in% "LT"))
 
 homelessLT$LTFishIDAutonumber
-#There are only 11 LT in this group. 
+#There are only 11 LT in this group. 12 as of 2021
 
 #write.csv(homelessLT, "homelessLT.csv") #visually check homeless LT against DB
 
@@ -461,6 +468,8 @@ for (i in 1:nrow(LT.ID)){
 }
 LT.ID[which(hex1 > 1),c("LTFishIDAutonumber","tags")]
 #Fish # 642 + 501 not currently fixable, but pay attention to others
+
+
 
 # hex2 <- NA
 # length(hex2) <- nrow(LT)
