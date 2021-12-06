@@ -529,7 +529,7 @@ library(ggplot2)
 ggplot(lambda.ests, aes(x=plot.time, y=estimate)) +
   geom_point() +
   geom_errorbar(aes(ymin=lcl, ymax=ucl), width=.1) +   ## CJS I like narrower error bars
-  scale_y_continuous(breaks=seq(0.5,1.50, 0.25), limits=c(0.5,1.50)) +
+  scale_y_continuous(breaks=seq(0.25,2, 0.25), limits=c(0.25,2)) +
   scale_x_continuous(breaks=seq(2008, 2021, 1)) +
   xlab(label = "Year") + ylab(label="Lambda estimate (95% ci)") +   ## CJS indicate that bars are 95% ci
   geom_hline(yintercept=1, linetype="dashed" ) +
